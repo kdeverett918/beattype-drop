@@ -3,23 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#04060d">
+  <meta name="description" content="BeatType Drop — a neon rhythm typing game. Catch words on the beat, build clean streaks, level up your typing.">
   <title>BeatType Drop</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2306080f'/%3E%3Cpath d='M14 43h36M20 33h24M26 23h12' stroke='%232ee9ff' stroke-width='6' stroke-linecap='square'/%3E%3Cpath d='M10 12h44v40H10z' fill='none' stroke='%23ff4d9a' stroke-width='4'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232ee9ff'/%3E%3Cstop offset='.55' stop-color='%237a5cff'/%3E%3Cstop offset='1' stop-color='%23ff4d9a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%2306080f'/%3E%3Cpath d='M16 44h32M22 33h20M28 22h8' stroke='url(%23g)' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='54' r='3' fill='%23c6ff4d'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #06080f;
-      --panel: rgba(13, 18, 32, 0.88);
-      --panel-strong: rgba(20, 28, 48, 0.96);
-      --ink: #f4f7ff;
-      --muted: #9ba7c4;
-      --cyan: #2ee9ff;
-      --lime: #c6ff4d;
-      --pink: #ff4d9a;
-      --orange: #ffb347;
-      --danger: #ff5364;
-      --line: rgba(255, 255, 255, 0.14);
+      /* Base depth ramp */
+      --bg-0: #04060d;
+      --bg-1: #080b16;
+      --bg-2: #0e0a1c;
+      --bg: var(--bg-0);
+
+      /* Ink */
+      --ink: #f3f6ff;
+      --muted: #97a3c2;
+      --line: rgba(255, 255, 255, 0.12);
+
+      /* Cohesive accent ramp (cyan -> violet -> magenta -> lime -> amber) */
+      --c-cyan: #34ecff;
+      --c-violet: #7a5cff;
+      --c-magenta: #ff4d9a;
+      --c-lime: #c6ff4d;
+      --c-amber: #ffb347;
+      --c-danger: #ff5364;
+
+      /* Per-mode accent (overridden on .mode-* ); semantic primary + secondary */
+      --accent: var(--c-cyan);
+      --accent-2: var(--c-violet);
+
+      /* Glass material */
+      --glass: rgba(16, 22, 40, 0.55);
+      --glass-strong: rgba(18, 24, 44, 0.82);
+      --edge: rgba(255, 255, 255, 0.14);
+
+      /* Radius + motion tokens */
+      --r-sm: 9px;
+      --r-md: 15px;
+      --r-lg: 24px;
+      --ease: cubic-bezier(0.2, 0.9, 0.25, 1);
+      --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+      /* Live hooks written by JS — DO NOT rename */
       --beat-glow: 0;
       --shake-x: 0px;
+
+      /* Legacy aliases kept so any stray reference still resolves */
+      --cyan: var(--c-cyan);
+      --lime: var(--c-lime);
+      --pink: var(--c-magenta);
+      --orange: var(--c-amber);
+      --danger: var(--c-danger);
+
+      color-scheme: dark;
     }
 
     * {
@@ -32,9 +71,11 @@
       min-height: 100%;
       margin: 0;
       overflow: hidden;
-      background: var(--bg);
+      background: var(--bg-0);
       color: var(--ink);
-      font-family: "Trebuchet MS", "Verdana", sans-serif;
+      font-family: "Space Grotesk", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
 
     body {
@@ -52,6 +93,11 @@
       display: none !important;
     }
 
+    .mono {
+      font-family: "JetBrains Mono", "Courier New", ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
     .game-shell {
       position: relative;
       width: 100vw;
@@ -59,60 +105,96 @@
       overflow: hidden;
       isolation: isolate;
       background:
-        radial-gradient(circle at 25% 20%, rgba(46, 233, 255, calc(0.16 + var(--beat-glow) * 0.28)), transparent 32%),
-        radial-gradient(circle at 78% 12%, rgba(255, 77, 154, calc(0.11 + var(--beat-glow) * 0.22)), transparent 30%),
-        radial-gradient(circle at 48% 88%, rgba(198, 255, 77, calc(0.09 + var(--beat-glow) * 0.18)), transparent 33%),
-        linear-gradient(135deg, #050711 0%, #09111d 42%, #140b20 100%);
+        radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+        linear-gradient(168deg, var(--bg-1) 0%, var(--bg-0) 46%, var(--bg-2) 100%);
       transform: translateX(var(--shake-x));
     }
 
+    /* Aurora light field — drifts slowly, pulses on the beat */
     .game-shell::before {
       content: "";
       position: absolute;
-      inset: 0;
-      z-index: -2;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-      background-size: 56px 56px;
-      mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
-      opacity: calc(0.32 + var(--beat-glow) * 0.24);
+      inset: -12%;
+      z-index: -3;
+      pointer-events: none;
+      background:
+        radial-gradient(38% 46% at 22% 24%, color-mix(in srgb, var(--accent) 60%, transparent), transparent 70%),
+        radial-gradient(34% 40% at 82% 16%, color-mix(in srgb, var(--accent-2) 55%, transparent), transparent 70%),
+        radial-gradient(46% 50% at 60% 96%, color-mix(in srgb, var(--c-magenta) 38%, transparent), transparent 72%),
+        radial-gradient(30% 34% at 8% 84%, color-mix(in srgb, var(--c-lime) 26%, transparent), transparent 70%);
+      filter: blur(36px) saturate(118%);
+      opacity: calc(0.5 + var(--beat-glow) * 0.5);
+      animation: auroraDrift 24s ease-in-out infinite alternate;
+      will-change: transform, opacity;
     }
 
+    /* Grid + CRT scanlines, stacked; fades top & bottom */
     .game-shell::after {
       content: "";
       position: absolute;
       inset: 0;
       z-index: -1;
       pointer-events: none;
-      background:
-        repeating-linear-gradient(
-          to bottom,
-          rgba(255, 255, 255, 0.035) 0,
-          rgba(255, 255, 255, 0.035) 1px,
-          transparent 1px,
-          transparent 5px
-        );
+      background-image:
+        repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 4px),
+        linear-gradient(color-mix(in srgb, var(--accent) 22%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 18%, transparent) 1px, transparent 1px);
+      background-size: 100% 4px, 64px 64px, 64px 64px;
+      mask-image: linear-gradient(to bottom, transparent 0%, #000 16%, #000 80%, transparent 100%);
       mix-blend-mode: screen;
-      opacity: 0.28;
+      opacity: calc(0.26 + var(--beat-glow) * 0.26);
     }
 
+    /* ---- Per-mode atmospheres ---- */
     .game-shell.mode-beginner {
-      background:
-        radial-gradient(circle at 24% 18%, rgba(46, 233, 255, calc(0.09 + var(--beat-glow) * 0.10)), transparent 34%),
-        radial-gradient(circle at 76% 80%, rgba(198, 255, 77, calc(0.05 + var(--beat-glow) * 0.08)), transparent 38%),
-        linear-gradient(135deg, #06101a 0%, #081827 48%, #0b1420 100%);
+      --accent: #2ee9ff;
+      --accent-2: #5fe6c8;
     }
 
     .game-shell.mode-beginner::before {
-      background-size: 88px 88px;
-      opacity: calc(0.14 + var(--beat-glow) * 0.08);
+      filter: blur(48px) saturate(105%);
+      opacity: calc(0.32 + var(--beat-glow) * 0.30);
     }
 
     .game-shell.mode-beginner::after {
-      background:
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent 42%, rgba(46, 233, 255, 0.035));
-      opacity: 0.16;
+      background-size: 100% 5px, 96px 96px, 96px 96px;
+      opacity: calc(0.12 + var(--beat-glow) * 0.12);
+    }
+
+    .game-shell.mode-intermediate {
+      --accent: #34ecff;
+      --accent-2: #7a5cff;
+    }
+
+    .game-shell.mode-advanced {
+      --accent: #8a6bff;
+      --accent-2: #ff4d9a;
+    }
+
+    .game-shell.mode-advanced::before {
+      opacity: calc(0.58 + var(--beat-glow) * 0.5);
+      animation-duration: 16s;
+    }
+
+    @keyframes auroraDrift {
+      0% { transform: translate3d(-2%, -1.5%, 0) scale(1.02); }
+      100% { transform: translate3d(2.5%, 2%, 0) scale(1.08); }
+    }
+
+    /* Miss vignette — overlay element, flashed by JS on a strike */
+    .miss-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(120% 90% at 50% 116%, color-mix(in srgb, var(--c-danger) 55%, transparent), transparent 60%);
+      transition: opacity 90ms var(--ease);
+    }
+
+    .game-shell.flash-miss .miss-flash {
+      opacity: 1;
+      transition: opacity 70ms var(--ease);
     }
 
     .hud {
@@ -120,60 +202,120 @@
       top: 16px;
       left: 16px;
       right: 16px;
-      z-index: 4;
+      z-index: 6;
       display: grid;
-      grid-template-columns: repeat(4, minmax(90px, 1fr)) auto;
+      grid-template-columns: repeat(4, minmax(86px, 1fr)) auto;
       gap: 10px;
       align-items: stretch;
       pointer-events: none;
     }
 
     .hud-card {
+      position: relative;
       min-width: 0;
-      padding: 11px 12px;
-      border: 1px solid var(--line);
-      background: rgba(6, 9, 18, 0.64);
-      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+      padding: 10px 13px 11px;
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 40%),
+        var(--glass);
+      box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px) saturate(120%);
+      -webkit-backdrop-filter: blur(14px) saturate(120%);
+      overflow: hidden;
+    }
+
+    .hud-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: calc(var(--beat-glow) * 0.6);
+      background: radial-gradient(120% 100% at 50% -20%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 60%);
+    }
+
+    .hud-card.is-combo {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--edge));
+    }
+
+    .hud-card.is-combo .hud-value {
+      color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+      text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 60%, transparent);
     }
 
     .hud-label {
       display: block;
       color: var(--muted);
-      font-size: clamp(10px, 1.5vw, 12px);
-      font-weight: 700;
+      font-size: clamp(9px, 1.4vw, 11px);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.16em;
     }
 
     .hud-value {
       display: block;
-      margin-top: 2px;
-      font-family: "Courier New", monospace;
-      font-size: clamp(20px, 3vw, 34px);
+      margin-top: 3px;
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(19px, 3vw, 32px);
       line-height: 1;
-      font-weight: 900;
+      font-weight: 800;
       color: var(--ink);
-      text-shadow: 0 0 18px rgba(46, 233, 255, 0.24);
+      text-shadow: 0 0 18px rgba(120, 180, 255, 0.18);
       white-space: nowrap;
+    }
+
+    .hud-value.pop {
+      animation: comboPop 360ms var(--spring);
+    }
+
+    /* Lives rendered as pips inside #livesValue */
+    .lives-pips {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .life-pip {
+      width: 13px;
+      height: 13px;
+      border-radius: 4px;
+      background: linear-gradient(160deg, var(--c-magenta), var(--c-danger));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--c-magenta) 60%, transparent);
+      transition: transform 200ms var(--spring), opacity 200ms var(--ease);
+    }
+
+    .life-pip.lost {
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: none;
+      transform: scale(0.74);
+      opacity: 0.5;
     }
 
     .mute-button {
       width: 52px;
       height: 52px;
-      border: 1px solid var(--line);
-      background: rgba(6, 9, 18, 0.68);
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      background: var(--glass);
+      backdrop-filter: blur(14px) saturate(120%);
+      -webkit-backdrop-filter: blur(14px) saturate(120%);
       color: var(--ink);
       cursor: pointer;
       pointer-events: auto;
       display: grid;
       place-items: center;
-      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+      transition: transform 160ms var(--spring), border-color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
     }
 
     .mute-button:hover,
     .mute-button:focus-visible {
-      transform: translateY(-1px) scale(1.03);
-      border-color: rgba(46, 233, 255, 0.7);
+      transform: translateY(-1px) scale(1.04);
+      border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+      box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 28%, transparent);
       outline: none;
     }
 
@@ -200,9 +342,27 @@
       bottom: 70px;
       height: 2px;
       z-index: 2;
-      background: linear-gradient(90deg, transparent, rgba(255, 83, 100, 0.82), transparent);
-      box-shadow: 0 0 18px rgba(255, 83, 100, 0.55);
-      opacity: 0.8;
+      background: linear-gradient(90deg,
+        transparent,
+        color-mix(in srgb, var(--c-danger) 35%, transparent) 18%,
+        var(--c-danger) 50%,
+        color-mix(in srgb, var(--c-danger) 35%, transparent) 82%,
+        transparent);
+      box-shadow: 0 0 20px color-mix(in srgb, var(--c-danger) 55%, transparent);
+      opacity: 0.78;
+      transition: opacity 120ms var(--ease), box-shadow 120ms var(--ease);
+    }
+
+    /* Travelling energy pulse along the line */
+    .danger-line::after {
+      content: "";
+      position: absolute;
+      top: -1px;
+      bottom: -1px;
+      width: 22%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+      filter: blur(1px);
+      animation: dangerSweep 3.2s linear infinite;
     }
 
     .danger-line::before {
@@ -210,66 +370,111 @@
       position: absolute;
       right: 18px;
       bottom: 7px;
-      color: rgba(255, 122, 135, 0.82);
-      font-size: 11px;
-      font-weight: 900;
-      letter-spacing: 0.18em;
+      color: color-mix(in srgb, var(--c-danger) 75%, var(--ink));
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.26em;
+      text-shadow: 0 0 12px color-mix(in srgb, var(--c-danger) 50%, transparent);
     }
 
+    .game-shell.flash-miss .danger-line {
+      opacity: 1;
+      box-shadow: 0 0 34px color-mix(in srgb, var(--c-danger) 85%, transparent);
+    }
+
+    @keyframes dangerSweep {
+      0% { left: -25%; }
+      100% { left: 100%; }
+    }
+
+    /* .word owns translate3d (set by JS every frame) — never animate transform here */
     .word {
       position: absolute;
       z-index: 3;
       left: 0;
       top: 0;
-      padding: 8px 12px 9px;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      background: rgba(10, 14, 27, 0.88);
-      color: rgba(244, 247, 255, 0.92);
+      will-change: transform, opacity;
+    }
+
+    /* All visual material + juice lives on the inner wrapper so .word's transform stays intact */
+    .word-inner {
+      display: block;
+      padding: 9px 14px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: var(--r-sm);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 42%),
+        rgba(9, 13, 26, 0.74);
       box-shadow:
-        0 12px 32px rgba(0, 0, 0, 0.33),
-        inset 0 0 20px rgba(46, 233, 255, 0.05);
-      font-family: "Courier New", monospace;
-      font-size: clamp(19px, 2.8vw, 30px);
+        0 10px 26px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      color: rgba(244, 247, 255, 0.78);
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-size: clamp(18px, 2.7vw, 28px);
       line-height: 1;
-      font-weight: 900;
+      font-weight: 800;
       white-space: nowrap;
       text-transform: lowercase;
-      text-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
-      will-change: transform, opacity;
-      transition: border-color 90ms ease, background 90ms ease, box-shadow 90ms ease;
+      letter-spacing: 0.01em;
+      transition: border-color 110ms var(--ease), background 110ms var(--ease), box-shadow 110ms var(--ease), color 110ms var(--ease);
     }
 
-    .word.active {
-      border-color: rgba(46, 233, 255, 0.95);
-      background: rgba(13, 26, 42, 0.95);
+    .word.active .word-inner {
+      border-color: color-mix(in srgb, var(--accent) 85%, transparent);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 50%),
+        color-mix(in srgb, var(--accent) 12%, rgba(9, 13, 26, 0.9));
       box-shadow:
-        0 0 0 1px rgba(46, 233, 255, 0.25),
-        0 0 28px rgba(46, 233, 255, 0.32),
-        0 18px 44px rgba(0, 0, 0, 0.38);
+        0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+        0 0 calc(26px + var(--beat-glow) * 14px) color-mix(in srgb, var(--accent) 42%, transparent),
+        0 16px 42px rgba(0, 0, 0, 0.46);
+      color: var(--ink);
     }
 
-    .word.bump {
-      animation: keyBump 95ms ease-out;
+    /* Proximity-to-drop-line warning (class toggled by JS) */
+    .word.near .word-inner {
+      border-color: color-mix(in srgb, var(--c-amber) 80%, transparent);
+      box-shadow:
+        0 0 22px color-mix(in srgb, var(--c-amber) 45%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.46);
     }
 
-    .word.wrong {
-      animation: wordWrong 150ms linear;
-      border-color: rgba(255, 83, 100, 0.95);
+    .word.near.peril .word-inner {
+      border-color: color-mix(in srgb, var(--c-danger) 88%, transparent);
+      box-shadow:
+        0 0 26px color-mix(in srgb, var(--c-danger) 55%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.5);
+    }
+
+    .word.bump .word-inner {
+      animation: keyBump 130ms var(--spring);
+    }
+
+    .word.wrong .word-inner {
+      animation: wordShake 160ms var(--ease);
+    }
+
+    .word.wrong .word-inner {
+      border-color: color-mix(in srgb, var(--c-danger) 92%, transparent);
     }
 
     .word .typed {
-      color: var(--lime);
-      text-shadow: 0 0 12px rgba(198, 255, 77, 0.62);
+      color: var(--c-lime);
+      text-shadow: 0 0 12px color-mix(in srgb, var(--c-lime) 62%, transparent);
     }
 
     .word .next {
-      color: #06101b;
-      background: var(--cyan);
-      box-shadow: 0 0 18px rgba(46, 233, 255, 0.64);
+      color: #05101c;
+      background: var(--accent);
+      border-radius: 4px;
+      box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 64%, transparent);
     }
 
     .word .rest {
-      color: rgba(244, 247, 255, 0.8);
+      color: rgba(244, 247, 255, 0.6);
     }
 
     .particle {
@@ -277,22 +482,39 @@
       z-index: 5;
       width: 7px;
       height: 7px;
-      background: var(--particle-color, var(--cyan));
+      border-radius: 2px;
+      background: var(--particle-color, var(--c-cyan));
       box-shadow: 0 0 12px currentColor;
       pointer-events: none;
       opacity: 0;
       animation: burst 560ms ease-out forwards;
     }
 
+    /* Expanding shockwave ring on word clear */
+    .shockwave {
+      position: absolute;
+      z-index: 4;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      border: 2px solid var(--shock-color, var(--c-cyan));
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.05);
+      animation: shockwave 540ms var(--ease) forwards;
+    }
+
     .floating-score {
       position: absolute;
       z-index: 6;
-      font-family: "Courier New", monospace;
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 18px;
-      font-weight: 900;
-      color: var(--lime);
-      text-shadow: 0 0 14px rgba(198, 255, 77, 0.7);
+      font-weight: 800;
+      color: var(--c-lime);
+      text-shadow: 0 0 14px color-mix(in srgb, var(--c-lime) 70%, transparent);
       pointer-events: none;
+      white-space: nowrap;
       animation: scoreFloat 760ms ease-out forwards;
     }
 
@@ -304,9 +526,11 @@
       place-items: center;
       padding: 22px;
       background:
-        radial-gradient(circle at center, rgba(46, 233, 255, 0.08), transparent 34%),
-        rgba(2, 4, 10, 0.66);
-      backdrop-filter: blur(7px);
+        radial-gradient(80% 60% at 50% 18%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+        rgba(2, 4, 10, 0.62);
+      backdrop-filter: blur(9px) saturate(115%);
+      -webkit-backdrop-filter: blur(9px) saturate(115%);
+      animation: screenIn 320ms var(--ease);
     }
 
     .screen.hidden {
@@ -314,38 +538,64 @@
     }
 
     .modal {
+      position: relative;
       width: min(760px, 100%);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      background: linear-gradient(155deg, rgba(12, 18, 33, 0.98), rgba(8, 10, 18, 0.95));
-      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      padding: clamp(22px, 5vw, 42px);
+      border: 1px solid var(--edge);
+      border-radius: var(--r-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 30%),
+        linear-gradient(155deg, rgba(14, 20, 38, 0.94), rgba(7, 9, 17, 0.95));
+      box-shadow:
+        0 40px 110px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      padding: clamp(24px, 5vw, 46px);
+      overflow: hidden;
+      animation: modalIn 420ms var(--spring);
+    }
+
+    /* Accent light bar across the top edge of the modal */
+    .modal::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--c-cyan), var(--c-violet), var(--c-magenta), var(--c-lime));
+      opacity: 0.9;
     }
 
     .eyebrow {
-      color: var(--cyan);
+      display: inline-block;
+      color: color-mix(in srgb, var(--accent) 85%, var(--ink));
+      font-family: "JetBrains Mono", monospace;
       font-size: 12px;
-      font-weight: 900;
-      letter-spacing: 0.22em;
+      font-weight: 700;
+      letter-spacing: 0.26em;
       text-transform: uppercase;
     }
 
     h1 {
-      margin: 10px 0 12px;
-      font-size: clamp(46px, 10vw, 94px);
-      line-height: 0.93;
-      letter-spacing: 0;
+      margin: 12px 0 14px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(46px, 10vw, 92px);
+      font-weight: 700;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
       text-transform: uppercase;
-      text-shadow:
-        4px 4px 0 rgba(255, 77, 154, 0.82),
-        -3px -3px 0 rgba(46, 233, 255, 0.68),
-        0 0 34px rgba(46, 233, 255, 0.25);
+      background: linear-gradient(120deg, #ffffff 0%, var(--c-cyan) 42%, var(--c-violet) 70%, var(--c-magenta) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 0 26px color-mix(in srgb, var(--accent) 30%, transparent));
     }
 
     .intro-copy,
     .game-over-copy {
-      max-width: 62ch;
+      max-width: 60ch;
       margin: 0 0 24px;
-      color: #c6cee3;
+      color: #c2cbe2;
       font-size: clamp(15px, 2vw, 18px);
       line-height: 1.55;
     }
@@ -354,108 +604,180 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 22px;
+      margin-top: 24px;
     }
 
-    .difficulty-button,
-    .action-button {
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(255, 255, 255, 0.055);
+    .difficulty-button {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 50%),
+        rgba(255, 255, 255, 0.03);
       color: var(--ink);
       cursor: pointer;
       padding: 16px;
       text-align: left;
-      min-height: 112px;
-      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+      min-height: 124px;
+      overflow: hidden;
+      transition: transform 180ms var(--spring), border-color 180ms var(--ease), background 180ms var(--ease), box-shadow 180ms var(--ease);
     }
 
+    .difficulty-button::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--m-accent, var(--c-cyan)) 30%, transparent), transparent 60%);
+      transition: opacity 180ms var(--ease);
+    }
+
+    .difficulty-button[data-mode="beginner"] { --m-accent: #2ee9ff; }
+    .difficulty-button[data-mode="intermediate"] { --m-accent: #7a5cff; }
+    .difficulty-button[data-mode="advanced"] { --m-accent: #ff4d9a; }
+
     .difficulty-button:hover,
-    .difficulty-button:focus-visible,
-    .action-button:hover,
-    .action-button:focus-visible {
-      transform: translateY(-2px);
-      border-color: rgba(46, 233, 255, 0.78);
-      background: rgba(46, 233, 255, 0.09);
-      box-shadow: 0 0 28px rgba(46, 233, 255, 0.16);
+    .difficulty-button:focus-visible {
+      transform: translateY(-3px);
+      border-color: color-mix(in srgb, var(--m-accent, var(--c-cyan)) 75%, transparent);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 30px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 24%, transparent);
       outline: none;
+    }
+
+    .difficulty-button:hover::before,
+    .difficulty-button:focus-visible::before {
+      opacity: 1;
     }
 
     .mode-name {
       display: block;
+      font-family: "Space Grotesk", sans-serif;
       font-size: 22px;
-      font-weight: 900;
+      font-weight: 700;
+      letter-spacing: -0.01em;
       text-transform: uppercase;
+      color: color-mix(in srgb, var(--m-accent, var(--ink)) 60%, var(--ink));
     }
 
     .mode-details {
       display: block;
       margin-top: 8px;
       color: var(--muted);
-      font-family: "Courier New", monospace;
-      font-size: 13px;
-      line-height: 1.45;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
+    /* Intensity bars — visual learner-progression cue */
+    .mode-intensity {
+      display: flex;
+      gap: 5px;
+      margin-top: auto;
+      padding-top: 14px;
+    }
+
+    .mode-intensity i {
+      height: 6px;
+      flex: 1;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .mode-intensity i.on {
+      background: var(--m-accent, var(--c-cyan));
+      box-shadow: 0 0 12px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 60%, transparent);
     }
 
     .quick-help {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 22px;
+      margin-top: 24px;
       color: var(--muted);
-      font-family: "Courier New", monospace;
-      font-size: 13px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
     }
 
     .pill {
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 7px 9px;
-      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .pill kbd {
+      font-family: inherit;
+      color: var(--ink);
+      font-weight: 700;
     }
 
     .run-badge {
       display: inline-flex;
       align-items: center;
+      gap: 8px;
       min-height: 34px;
-      margin: 2px 0 8px;
-      padding: 8px 11px;
-      border: 1px solid rgba(198, 255, 77, 0.34);
-      background: rgba(198, 255, 77, 0.08);
-      color: var(--lime);
-      font-family: "Courier New", monospace;
+      margin: 2px 0 10px;
+      padding: 9px 14px;
+      border: 1px solid color-mix(in srgb, var(--c-lime) 40%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--c-lime) 10%, transparent);
+      color: var(--c-lime);
+      font-family: "JetBrains Mono", monospace;
       font-size: 13px;
-      font-weight: 900;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      text-shadow: 0 0 14px rgba(198, 255, 77, 0.42);
+      text-shadow: 0 0 14px color-mix(in srgb, var(--c-lime) 42%, transparent);
     }
 
     .game-over-stats {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
-      margin: 18px 0 22px;
+      margin: 18px 0 24px;
     }
 
     .stat-block {
-      border: 1px solid rgba(255, 255, 255, 0.13);
-      padding: 14px;
-      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      padding: 15px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 50%),
+        rgba(255, 255, 255, 0.03);
     }
 
     .stat-block span {
       display: block;
       color: var(--muted);
       font-size: 11px;
-      font-weight: 900;
-      letter-spacing: 0.12em;
+      font-weight: 700;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
     .stat-block strong {
       display: block;
-      margin-top: 3px;
-      font-family: "Courier New", monospace;
-      font-size: clamp(24px, 5vw, 42px);
+      margin-top: 4px;
+      font-family: "JetBrains Mono", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(24px, 5vw, 40px);
+      font-weight: 800;
       line-height: 1;
+    }
+
+    /* New-high-score celebration (class added by JS) */
+    .modal.new-high .stat-block:nth-child(3) {
+      border-color: color-mix(in srgb, var(--c-lime) 60%, transparent);
+      box-shadow: 0 0 28px color-mix(in srgb, var(--c-lime) 22%, transparent);
+    }
+
+    .modal.new-high .stat-block:nth-child(3) strong {
+      color: var(--c-lime);
+      text-shadow: 0 0 16px color-mix(in srgb, var(--c-lime) 55%, transparent);
     }
 
     .action-row {
@@ -465,24 +787,76 @@
     }
 
     .action-button {
-      min-height: 0;
-      padding: 14px 18px;
-      font-weight: 900;
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 50%),
+        rgba(255, 255, 255, 0.04);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 14px 22px;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       text-align: center;
+      transition: transform 160ms var(--spring), border-color 160ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
+    }
+
+    .action-button:hover,
+    .action-button:focus-visible {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--accent) 78%, transparent);
+      box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 20%, transparent);
+      outline: none;
+    }
+
+    /* Primary CTA */
+    .action-button.primary {
+      border-color: transparent;
+      background: linear-gradient(120deg, var(--c-cyan), var(--c-violet));
+      color: #05101c;
+      box-shadow: 0 10px 30px color-mix(in srgb, var(--c-violet) 35%, transparent);
+    }
+
+    .action-button.primary:hover,
+    .action-button.primary:focus-visible {
+      box-shadow: 0 14px 38px color-mix(in srgb, var(--c-cyan) 42%, transparent);
     }
 
     @keyframes keyBump {
       0% { transform: scale(1); }
-      45% { transform: scale(1.08); }
+      40% { transform: scale(1.12); }
       100% { transform: scale(1); }
     }
 
-    @keyframes wordWrong {
-      0%, 100% { margin-left: 0; }
-      25% { margin-left: -7px; }
-      50% { margin-left: 7px; }
-      75% { margin-left: -4px; }
+    @keyframes wordShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-7px); }
+      45% { transform: translateX(6px); }
+      70% { transform: translateX(-4px); }
+      88% { transform: translateX(2px); }
+    }
+
+    @keyframes comboPop {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.28); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shockwave {
+      0% { opacity: 0.85; transform: translate(-50%, -50%) scale(0.05); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    @keyframes screenIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(14px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     @keyframes burst {
@@ -580,8 +954,8 @@
       }
 
       .difficulty-button {
-        min-height: 78px;
-        padding: 13px 15px;
+        min-height: 96px;
+        padding: 14px 15px;
       }
 
       .mode-name {
@@ -614,10 +988,20 @@
       }
 
       .word,
+      .word-inner,
+      .hud-card,
+      .hud-value,
+      .life-pip,
       .mute-button,
       .difficulty-button,
-      .action-button {
+      .action-button,
+      .danger-line {
         transition: none;
+      }
+
+      .game-shell::before,
+      .danger-line::after {
+        animation: none;
       }
     }
   </style>
@@ -629,9 +1013,9 @@
         <span class="hud-label">Score</span>
         <span class="hud-value" id="scoreValue">0</span>
       </div>
-      <div class="hud-card">
+      <div class="hud-card is-combo">
         <span class="hud-label">Combo</span>
-        <span class="hud-value" id="comboValue">x1</span>
+        <span class="hud-value" id="comboValue">x1.0</span>
       </div>
       <div class="hud-card">
         <span class="hud-label">Lives</span>
@@ -657,6 +1041,7 @@
 
     <section class="playfield" id="playfield" aria-label="Falling words"></section>
     <div class="danger-line" aria-hidden="true"></div>
+    <div class="miss-flash" aria-hidden="true"></div>
 
     <section class="screen" id="startScreen">
       <div class="modal">
@@ -669,22 +1054,25 @@
         <div class="difficulty-grid" aria-label="Choose practice track">
           <button class="difficulty-button" type="button" data-mode="beginner">
             <span class="mode-name">Beginner</span>
-            <span class="mode-details">Tiny words / 70 BPM / calm start</span>
+            <span class="mode-details">Tiny words &middot; 70 BPM &middot; calm start</span>
+            <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
           </button>
           <button class="difficulty-button" type="button" data-mode="intermediate">
             <span class="mode-name">Intermediate</span>
-            <span class="mode-details">Core words / 104 BPM / steady rhythm</span>
+            <span class="mode-details">Core words &middot; 104 BPM &middot; steady rhythm</span>
+            <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span>
           </button>
           <button class="difficulty-button" type="button" data-mode="advanced">
             <span class="mode-name">Advanced</span>
-            <span class="mode-details">Longer words / 132 BPM / faster streaks</span>
+            <span class="mode-details">Longer words &middot; 132 BPM &middot; faster streaks</span>
+            <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span>
           </button>
         </div>
-        <div class="quick-help" aria-label="Controls">
-          <span class="pill">Accuracy first</span>
-          <span class="pill">3 strikes</span>
-          <span class="pill">Streak boosts</span>
-          <span class="pill">Level up</span>
+        <div class="quick-help" aria-label="How to play">
+          <span class="pill">Type the falling word</span>
+          <span class="pill"><kbd>Backspace</kbd> resets</span>
+          <span class="pill"><kbd>Esc</kbd> pauses</span>
+          <span class="pill">3 strikes &middot; build streaks</span>
         </div>
       </div>
     </section>
@@ -710,7 +1098,7 @@
           </div>
         </div>
         <div class="action-row">
-          <button class="action-button" type="button" id="retryButton">Play Again</button>
+          <button class="action-button primary" type="button" id="retryButton">Play Again</button>
           <button class="action-button" type="button" id="modeButton">Change Mode</button>
         </div>
       </div>
@@ -722,7 +1110,7 @@
         <h1>Hold Beat</h1>
         <p class="game-over-copy">Press Esc to resume, or choose a new practice track from the start screen.</p>
         <div class="action-row">
-          <button class="action-button" type="button" id="resumeButton">Resume</button>
+          <button class="action-button primary" type="button" id="resumeButton">Resume</button>
           <button class="action-button" type="button" id="pauseModeButton">Change Mode</button>
         </div>
       </div>
@@ -931,11 +1319,31 @@
       }
     }
 
+    let hudComboShown = 1;
+
     function updateHud() {
       els.score.textContent = state.score.toLocaleString();
-      els.combo.textContent = "x" + comboMultiplier().toFixed(1);
-      els.lives.textContent = state.lives + "/3";
+      const mult = comboMultiplier();
+      els.combo.textContent = "x" + mult.toFixed(1);
+      if (mult > hudComboShown + 0.0001) {
+        els.combo.classList.remove("pop");
+        void els.combo.offsetWidth;
+        els.combo.classList.add("pop");
+      }
+      hudComboShown = mult;
+      renderLives();
       els.high.textContent = state.highScore.toLocaleString();
+    }
+
+    function renderLives() {
+      const total = 3;
+      let html = "<span class=\"lives-pips\">";
+      for (let i = 0; i < total; i += 1) {
+        html += "<span class=\"life-pip" + (i < state.lives ? "" : " lost") + "\"></span>";
+      }
+      html += "</span>";
+      els.lives.innerHTML = html;
+      els.lives.setAttribute("aria-label", Math.max(0, state.lives) + " of 3 lives");
     }
 
     function comboMultiplier() {
@@ -1160,12 +1568,15 @@
         state.rafId = null;
       }
       clearWords();
+      const overModal = els.over.querySelector(".modal");
       if (state.score > state.highScore) {
         state.highScore = state.score;
         writeStoredValue(STORAGE_KEYS.highScore, String(state.highScore));
         els.gameOverCopy.textContent = "New high score. That one landed right on the beat.";
+        if (overModal) overModal.classList.add("new-high");
       } else {
         els.gameOverCopy.textContent = getRunMessage();
+        if (overModal) overModal.classList.remove("new-high");
       }
       els.runBadge.textContent = getRunBadge();
       els.finalScore.textContent = state.score.toLocaleString();
@@ -1254,7 +1665,7 @@
     function renderWord(word) {
       const isActive = word.id === state.targetId;
       if (!isActive) {
-        word.el.innerHTML = "<span class=\"rest\">" + word.text + "</span>";
+        word.el.innerHTML = "<span class=\"word-inner\"><span class=\"rest\">" + word.text + "</span></span>";
         word.el.classList.remove("active");
         return;
       }
@@ -1263,9 +1674,11 @@
       const next = word.text.slice(word.progress, word.progress + 1);
       const rest = word.text.slice(word.progress + 1);
       word.el.innerHTML =
+        "<span class=\"word-inner\">" +
         "<span class=\"typed\">" + typed + "</span>" +
         (next ? "<span class=\"next\">" + next + "</span>" : "") +
-        "<span class=\"rest\">" + rest + "</span>";
+        "<span class=\"rest\">" + rest + "</span>" +
+        "</span>";
       word.el.classList.add("active");
     }
 
@@ -1289,6 +1702,9 @@
         }
         word.y += fallSpeed * delta;
         word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
+
+        word.el.classList.toggle("near", word.y >= lineY - 150);
+        word.el.classList.toggle("peril", word.y >= lineY - 48);
 
         if (word.y >= lineY) {
           missWord(word, i);
@@ -1325,11 +1741,17 @@
       state.lives -= 1;
       state.shakeTimer = 0.32;
       state.nextStrikeAt = now + state.config.strikeGraceSeconds;
+      flashMiss();
       playError();
       updateHud();
       if (state.lives <= 0) {
         endGame();
       }
+    }
+
+    function flashMiss() {
+      els.shell.classList.add("flash-miss");
+      window.setTimeout(() => els.shell.classList.remove("flash-miss"), 150);
     }
 
     function handleKeydown(event) {
@@ -1465,7 +1887,16 @@
     }
 
     function spawnBurst(x, y, points) {
-      const colors = ["#2ee9ff", "#c6ff4d", "#ff4d9a", "#ffb347"];
+      const colors = ["#34ecff", "#7a5cff", "#ff4d9a", "#c6ff4d", "#ffb347"];
+
+      const ring = document.createElement("span");
+      ring.className = "shockwave";
+      ring.style.left = x + "px";
+      ring.style.top = y + "px";
+      ring.style.setProperty("--shock-color", "var(--accent)");
+      els.playfield.appendChild(ring);
+      ring.addEventListener("animationend", () => ring.remove(), { once: true });
+
       for (let i = 0; i < 22; i += 1) {
         const particle = document.createElement("span");
         const angle = Math.random() * Math.PI * 2;
