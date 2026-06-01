@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BeatType Drop</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2306080f'/%3E%3Cpath d='M14 43h36M20 33h24M26 23h12' stroke='%232ee9ff' stroke-width='6' stroke-linecap='square'/%3E%3Cpath d='M10 12h44v40H10z' fill='none' stroke='%23ff4d9a' stroke-width='4'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #06080f;
+      --panel: rgba(13, 18, 32, 0.88);
+      --panel-strong: rgba(20, 28, 48, 0.96);
+      --ink: #f4f7ff;
+      --muted: #9ba7c4;
+      --cyan: #2ee9ff;
+      --lime: #c6ff4d;
+      --pink: #ff4d9a;
+      --orange: #ffb347;
+      --danger: #ff5364;
+      --line: rgba(255, 255, 255, 0.14);
+      --beat-glow: 0;
+      --shake-x: 0px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Verdana", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: stretch;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .game-shell {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 25% 20%, rgba(46, 233, 255, calc(0.16 + var(--beat-glow) * 0.28)), transparent 32%),
+        radial-gradient(circle at 78% 12%, rgba(255, 77, 154, calc(0.11 + var(--beat-glow) * 0.22)), transparent 30%),
+        radial-gradient(circle at 48% 88%, rgba(198, 255, 77, calc(0.09 + var(--beat-glow) * 0.18)), transparent 33%),
+        linear-gradient(135deg, #050711 0%, #09111d 42%, #140b20 100%);
+      transform: translateX(var(--shake-x));
+    }
+
+    .game-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
+      opacity: calc(0.32 + var(--beat-glow) * 0.24);
+    }
+
+    .game-shell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0.035) 0,
+          rgba(255, 255, 255, 0.035) 1px,
+          transparent 1px,
+          transparent 5px
+        );
+      mix-blend-mode: screen;
+      opacity: 0.28;
+    }
+
+    .hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(90px, 1fr)) auto;
+      gap: 10px;
+      align-items: stretch;
+      pointer-events: none;
+    }
+
+    .hud-card {
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      background: rgba(6, 9, 18, 0.64);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+    }
+
+    .hud-label {
+      display: block;
+      color: var(--muted);
+      font-size: clamp(10px, 1.5vw, 12px);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .hud-value {
+      display: block;
+      margin-top: 2px;
+      font-family: "Courier New", monospace;
+      font-size: clamp(20px, 3vw, 34px);
+      line-height: 1;
+      font-weight: 900;
+      color: var(--ink);
+      text-shadow: 0 0 18px rgba(46, 233, 255, 0.24);
+      white-space: nowrap;
+    }
+
+    .mute-button {
+      width: 52px;
+      height: 52px;
+      border: 1px solid var(--line);
+      background: rgba(6, 9, 18, 0.68);
+      color: var(--ink);
+      cursor: pointer;
+      pointer-events: auto;
+      display: grid;
+      place-items: center;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .mute-button:hover,
+    .mute-button:focus-visible {
+      transform: translateY(-1px) scale(1.03);
+      border-color: rgba(46, 233, 255, 0.7);
+      outline: none;
+    }
+
+    .mute-button svg {
+      width: 23px;
+      height: 23px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .playfield {
+      position: absolute;
+      inset: 88px 0 76px;
+      overflow: hidden;
+    }
+
+    .danger-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 70px;
+      height: 2px;
+      z-index: 2;
+      background: linear-gradient(90deg, transparent, rgba(255, 83, 100, 0.82), transparent);
+      box-shadow: 0 0 18px rgba(255, 83, 100, 0.55);
+      opacity: 0.8;
+    }
+
+    .danger-line::before {
+      content: "DROP LINE";
+      position: absolute;
+      right: 18px;
+      bottom: 7px;
+      color: rgba(255, 122, 135, 0.82);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+    }
+
+    .word {
+      position: absolute;
+      z-index: 3;
+      left: 0;
+      top: 0;
+      padding: 8px 12px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(10, 14, 27, 0.88);
+      color: rgba(244, 247, 255, 0.92);
+      box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.33),
+        inset 0 0 20px rgba(46, 233, 255, 0.05);
+      font-family: "Courier New", monospace;
+      font-size: clamp(19px, 2.8vw, 30px);
+      line-height: 1;
+      font-weight: 900;
+      white-space: nowrap;
+      text-transform: lowercase;
+      text-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
+      will-change: transform, opacity;
+      transition: border-color 90ms ease, background 90ms ease, box-shadow 90ms ease;
+    }
+
+    .word.active {
+      border-color: rgba(46, 233, 255, 0.95);
+      background: rgba(13, 26, 42, 0.95);
+      box-shadow:
+        0 0 0 1px rgba(46, 233, 255, 0.25),
+        0 0 28px rgba(46, 233, 255, 0.32),
+        0 18px 44px rgba(0, 0, 0, 0.38);
+    }
+
+    .word.bump {
+      animation: keyBump 95ms ease-out;
+    }
+
+    .word.wrong {
+      animation: wordWrong 150ms linear;
+      border-color: rgba(255, 83, 100, 0.95);
+    }
+
+    .word .typed {
+      color: var(--lime);
+      text-shadow: 0 0 12px rgba(198, 255, 77, 0.62);
+    }
+
+    .word .next {
+      color: #06101b;
+      background: var(--cyan);
+      box-shadow: 0 0 18px rgba(46, 233, 255, 0.64);
+    }
+
+    .word .rest {
+      color: rgba(244, 247, 255, 0.8);
+    }
+
+    .particle {
+      position: absolute;
+      z-index: 5;
+      width: 7px;
+      height: 7px;
+      background: var(--particle-color, var(--cyan));
+      box-shadow: 0 0 12px currentColor;
+      pointer-events: none;
+      opacity: 0;
+      animation: burst 560ms ease-out forwards;
+    }
+
+    .floating-score {
+      position: absolute;
+      z-index: 6;
+      font-family: "Courier New", monospace;
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--lime);
+      text-shadow: 0 0 14px rgba(198, 255, 77, 0.7);
+      pointer-events: none;
+      animation: scoreFloat 760ms ease-out forwards;
+    }
+
+    .screen {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background:
+        radial-gradient(circle at center, rgba(46, 233, 255, 0.08), transparent 34%),
+        rgba(2, 4, 10, 0.66);
+      backdrop-filter: blur(7px);
+    }
+
+    .screen.hidden {
+      display: none;
+    }
+
+    .modal {
+      width: min(760px, 100%);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(155deg, rgba(12, 18, 33, 0.98), rgba(8, 10, 18, 0.95));
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      padding: clamp(22px, 5vw, 42px);
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 10px 0 12px;
+      font-size: clamp(46px, 10vw, 94px);
+      line-height: 0.93;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      text-shadow:
+        4px 4px 0 rgba(255, 77, 154, 0.82),
+        -3px -3px 0 rgba(46, 233, 255, 0.68),
+        0 0 34px rgba(46, 233, 255, 0.25);
+    }
+
+    .intro-copy,
+    .game-over-copy {
+      max-width: 62ch;
+      margin: 0 0 24px;
+      color: #c6cee3;
+      font-size: clamp(15px, 2vw, 18px);
+      line-height: 1.55;
+    }
+
+    .difficulty-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .difficulty-button,
+    .action-button {
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.055);
+      color: var(--ink);
+      cursor: pointer;
+      padding: 16px;
+      text-align: left;
+      min-height: 112px;
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+    }
+
+    .difficulty-button:hover,
+    .difficulty-button:focus-visible,
+    .action-button:hover,
+    .action-button:focus-visible {
+      transform: translateY(-2px);
+      border-color: rgba(46, 233, 255, 0.78);
+      background: rgba(46, 233, 255, 0.09);
+      box-shadow: 0 0 28px rgba(46, 233, 255, 0.16);
+      outline: none;
+    }
+
+    .mode-name {
+      display: block;
+      font-size: 22px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .mode-details {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .quick-help {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .pill {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 7px 9px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .game-over-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0 22px;
+    }
+
+    .stat-block {
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .stat-block span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .stat-block strong {
+      display: block;
+      margin-top: 3px;
+      font-family: "Courier New", monospace;
+      font-size: clamp(24px, 5vw, 42px);
+      line-height: 1;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .action-button {
+      min-height: 0;
+      padding: 14px 18px;
+      font-weight: 900;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    @keyframes keyBump {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes wordWrong {
+      0%, 100% { margin-left: 0; }
+      25% { margin-left: -7px; }
+      50% { margin-left: 7px; }
+      75% { margin-left: -4px; }
+    }
+
+    @keyframes burst {
+      0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1) rotate(0deg);
+      }
+      100% {
+        opacity: 0;
+        transform:
+          translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px))
+          scale(0.2)
+          rotate(160deg);
+      }
+    }
+
+    @keyframes scoreFloat {
+      0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.9);
+      }
+      18% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-34px) scale(1.08);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .hud {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+        gap: 6px;
+      }
+
+      .hud-card {
+        padding: 7px 6px;
+      }
+
+      .mute-button {
+        width: 42px;
+        height: 42px;
+      }
+
+      .hud-label {
+        font-size: 8px;
+        letter-spacing: 0.08em;
+      }
+
+      .hud-value {
+        font-size: clamp(14px, 4.2vw, 19px);
+      }
+
+      .playfield {
+        inset: 104px 0 70px;
+      }
+
+      .danger-line::before {
+        right: 10px;
+        font-size: 9px;
+      }
+
+      .difficulty-grid,
+      .game-over-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .screen {
+        padding: 14px;
+      }
+
+      .modal {
+        padding: 20px 22px;
+      }
+
+      h1 {
+        margin: 8px 0 10px;
+        font-size: 42px;
+      }
+
+      .intro-copy,
+      .game-over-copy {
+        margin-bottom: 17px;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .difficulty-grid {
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .difficulty-button {
+        min-height: 78px;
+        padding: 13px 15px;
+      }
+
+      .mode-name {
+        font-size: 21px;
+      }
+
+      .mode-details {
+        margin-top: 6px;
+        font-size: 12px;
+      }
+
+      .quick-help {
+        gap: 7px;
+        margin-top: 14px;
+        font-size: 12px;
+      }
+
+      .pill {
+        padding: 6px 8px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+
+      .word,
+      .mute-button,
+      .difficulty-button,
+      .action-button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell" id="gameShell">
+    <section class="hud" aria-label="Game stats">
+      <div class="hud-card">
+        <span class="hud-label">Score</span>
+        <span class="hud-value" id="scoreValue">0</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">Combo</span>
+        <span class="hud-value" id="comboValue">x1</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">Lives</span>
+        <span class="hud-value" id="livesValue">3</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">High</span>
+        <span class="hud-value" id="highValue">0</span>
+      </div>
+      <button class="mute-button" id="muteButton" type="button" aria-label="Mute sound">
+        <svg id="soundOnIcon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4z"></path>
+          <path d="M17 9.5a4 4 0 0 1 0 5"></path>
+          <path d="M19.5 7a7.5 7.5 0 0 1 0 10"></path>
+        </svg>
+        <svg id="soundOffIcon" viewBox="0 0 24 24" aria-hidden="true" hidden>
+          <path d="M4 9v6h4l5 4V5L8 9H4z"></path>
+          <path d="M18 9l4 4"></path>
+          <path d="M22 9l-4 4"></path>
+        </svg>
+      </button>
+    </section>
+
+    <section class="playfield" id="playfield" aria-label="Falling words"></section>
+    <div class="danger-line" aria-hidden="true"></div>
+
+    <section class="screen" id="startScreen">
+      <div class="modal">
+        <div class="eyebrow">Rhythm Typing Arcade</div>
+        <h1>BeatType Drop</h1>
+        <p class="intro-copy">
+          Pick a difficulty, follow the pulse, and type each falling word before it crosses the drop line.
+          Complete words to burst them, stack combo, and chase the saved high score.
+        </p>
+        <div class="difficulty-grid" aria-label="Choose difficulty">
+          <button class="difficulty-button" type="button" data-mode="easy">
+            <span class="mode-name">Easy</span>
+            <span class="mode-details">Short words / 92 BPM / roomy fall</span>
+          </button>
+          <button class="difficulty-button" type="button" data-mode="medium">
+            <span class="mode-name">Medium</span>
+            <span class="mode-details">Mixed words / 116 BPM / steady pressure</span>
+          </button>
+          <button class="difficulty-button" type="button" data-mode="hard">
+            <span class="mode-name">Hard</span>
+            <span class="mode-details">Longer words / 144 BPM / fast but fair</span>
+          </button>
+        </div>
+        <div class="quick-help" aria-label="Controls">
+          <span class="pill">Type letters</span>
+          <span class="pill">Backspace changes target</span>
+          <span class="pill">3 strikes</span>
+          <span class="pill">Mute button</span>
+          <span class="pill">Esc pauses</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen hidden" id="gameOverScreen">
+      <div class="modal">
+        <div class="eyebrow">Game Over</div>
+        <h1>Track Ended</h1>
+        <p class="game-over-copy" id="gameOverCopy">Nice run. The high score table is listening.</p>
+        <div class="game-over-stats">
+          <div class="stat-block">
+            <span>Score</span>
+            <strong id="finalScore">0</strong>
+          </div>
+          <div class="stat-block">
+            <span>Best Combo</span>
+            <strong id="bestCombo">0</strong>
+          </div>
+          <div class="stat-block">
+            <span>High Score</span>
+            <strong id="finalHigh">0</strong>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="action-button" type="button" id="retryButton">Play Again</button>
+          <button class="action-button" type="button" id="modeButton">Change Mode</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen hidden" id="pauseScreen">
+      <div class="modal">
+        <div class="eyebrow">Paused</div>
+        <h1>Hold Beat</h1>
+        <p class="game-over-copy">Press Esc to resume, or choose a new mode from the start screen.</p>
+        <div class="action-row">
+          <button class="action-button" type="button" id="resumeButton">Resume</button>
+          <button class="action-button" type="button" id="pauseModeButton">Change Mode</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /*
+      CUSTOM WORDS:
+      Paste your own words into CUSTOM_WORDS below. Use lowercase words only,
+      separated by commas, like: ["river", "music", "bright"].
+      Leave it empty to use the built-in list.
+    */
+    const CUSTOM_WORDS = [];
+
+    const BUILT_IN_WORDS = [
+      "able", "about", "after", "again", "air", "also", "always", "apple", "around", "back",
+      "ball", "base", "beat", "best", "bird", "blue", "book", "bring", "build", "call",
+      "carry", "clean", "close", "dance", "dream", "early", "earth", "every", "field", "final",
+      "fire", "fresh", "friend", "garden", "green", "happy", "heart", "house", "human", "kind",
+      "light", "little", "magic", "market", "music", "night", "open", "paper", "party", "place",
+      "plant", "quick", "river", "round", "shine", "small", "sound", "space", "story", "sweet",
+      "table", "thing", "today", "water", "window", "world"
+    ];
+
+    const DIFFICULTIES = {
+      easy: {
+        label: "Easy",
+        bpm: 92,
+        fallSeconds: 10.2,
+        spawnBeats: 3,
+        minLength: 3,
+        maxLength: 5,
+        maxWords: 6,
+        basePoints: 90,
+        strikeGraceSeconds: 0.85
+      },
+      medium: {
+        label: "Medium",
+        bpm: 116,
+        fallSeconds: 8.4,
+        spawnBeats: 2,
+        minLength: 4,
+        maxLength: 7,
+        maxWords: 8,
+        basePoints: 115,
+        strikeGraceSeconds: 0.75
+      },
+      hard: {
+        label: "Hard",
+        bpm: 144,
+        fallSeconds: 7.2,
+        spawnBeats: 2,
+        minLength: 5,
+        maxLength: 8,
+        maxWords: 9,
+        basePoints: 145,
+        strikeGraceSeconds: 0.65
+      }
+    };
+
+    const els = {
+      shell: document.getElementById("gameShell"),
+      playfield: document.getElementById("playfield"),
+      score: document.getElementById("scoreValue"),
+      combo: document.getElementById("comboValue"),
+      lives: document.getElementById("livesValue"),
+      high: document.getElementById("highValue"),
+      mute: document.getElementById("muteButton"),
+      soundOn: document.getElementById("soundOnIcon"),
+      soundOff: document.getElementById("soundOffIcon"),
+      start: document.getElementById("startScreen"),
+      over: document.getElementById("gameOverScreen"),
+      pause: document.getElementById("pauseScreen"),
+      finalScore: document.getElementById("finalScore"),
+      bestCombo: document.getElementById("bestCombo"),
+      finalHigh: document.getElementById("finalHigh"),
+      gameOverCopy: document.getElementById("gameOverCopy"),
+      retry: document.getElementById("retryButton"),
+      mode: document.getElementById("modeButton"),
+      resume: document.getElementById("resumeButton"),
+      pauseMode: document.getElementById("pauseModeButton")
+    };
+
+    const STORAGE_KEYS = {
+      highScore: "beatTypeDropHighScore",
+      muted: "beatTypeDropMuted"
+    };
+
+    const state = {
+      status: "start",
+      modeKey: "medium",
+      config: DIFFICULTIES.medium,
+      words: [],
+      targetId: null,
+      score: 0,
+      combo: 0,
+      bestCombo: 0,
+      lives: 3,
+      highScore: Number(readStoredValue(STORAGE_KEYS.highScore, "0")) || 0,
+      nextWordId: 1,
+      lastFrame: 0,
+      rafId: null,
+      lastBeatAt: 0,
+      nextBeatAt: 0,
+      nextSpawnBeat: 0,
+      beatCount: 0,
+      beatGlow: 0,
+      shakeTimer: 0,
+      nextStrikeAt: 0,
+      muted: readStoredValue(STORAGE_KEYS.muted, "false") === "true",
+      audio: null,
+      beatTimer: null,
+      wordBag: [],
+      recentWords: []
+    };
+
+    function readStoredValue(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value === null ? fallback : value;
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function writeStoredValue(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (error) {
+        // The game still plays if storage is unavailable.
+      }
+    }
+
+    function nowSeconds() {
+      return performance.now() / 1000;
+    }
+
+    function beatInterval() {
+      return 60 / state.config.bpm;
+    }
+
+    function cleanWord(word) {
+      return String(word).trim().toLowerCase().replace(/[^a-z]/g, "");
+    }
+
+    function availableWords() {
+      const custom = CUSTOM_WORDS.map(cleanWord).filter(Boolean);
+      return (custom.length ? custom : BUILT_IN_WORDS).map(cleanWord).filter(Boolean);
+    }
+
+    function resetWordBag() {
+      const cfg = state.config;
+      const inRange = (word) => word.length >= cfg.minLength && word.length <= cfg.maxLength;
+      const pool = availableWords().filter(inRange);
+      const builtInFallback = BUILT_IN_WORDS.map(cleanWord).filter(Boolean).filter(inRange);
+      state.wordBag = (pool.length ? pool : builtInFallback).slice();
+      shuffle(state.wordBag);
+    }
+
+    function shuffle(list) {
+      for (let i = list.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = list[i];
+        list[i] = list[j];
+        list[j] = temp;
+      }
+      return list;
+    }
+
+    function pickWord() {
+      if (!state.wordBag.length) {
+        resetWordBag();
+      }
+
+      let word = state.wordBag.pop();
+      let attempts = 0;
+      while (state.recentWords.includes(word) && attempts < 8 && state.wordBag.length) {
+        state.wordBag.unshift(word);
+        word = state.wordBag.pop();
+        attempts += 1;
+      }
+
+      state.recentWords.push(word);
+      if (state.recentWords.length > 10) {
+        state.recentWords.shift();
+      }
+      return word;
+    }
+
+    function setScreen(which) {
+      els.start.classList.toggle("hidden", which !== "start");
+      els.over.classList.toggle("hidden", which !== "over");
+      els.pause.classList.toggle("hidden", which !== "pause");
+    }
+
+    function updateHud() {
+      els.score.textContent = state.score.toLocaleString();
+      els.combo.textContent = "x" + comboMultiplier().toFixed(1);
+      els.lives.textContent = state.lives + "/3";
+      els.high.textContent = state.highScore.toLocaleString();
+    }
+
+    function comboMultiplier() {
+      return comboMultiplierFor(state.combo);
+    }
+
+    function comboMultiplierFor(comboCount) {
+      return Math.min(5, 1 + Math.max(0, comboCount - 1) * 0.1);
+    }
+
+    function updateMuteButton() {
+      els.soundOn.hidden = state.muted;
+      els.soundOff.hidden = !state.muted;
+      els.mute.setAttribute("aria-label", state.muted ? "Unmute sound" : "Mute sound");
+      if (state.audio && state.audio.master) {
+        state.audio.master.gain.setTargetAtTime(state.muted ? 0 : 0.78, state.audio.ctx.currentTime, 0.025);
+      }
+    }
+
+    function ensureAudio() {
+      if (state.audio) {
+        return state.audio;
+      }
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) {
+        return null;
+      }
+
+      const ctx = new AudioContext();
+      const master = ctx.createGain();
+      master.gain.value = state.muted ? 0 : 0.78;
+      master.connect(ctx.destination);
+
+      state.audio = { ctx, master };
+      return state.audio;
+    }
+
+    function playKick(time) {
+      const audio = ensureAudio();
+      if (!audio || state.muted) return;
+
+      const osc = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(140, time);
+      osc.frequency.exponentialRampToValueAtTime(46, time + 0.14);
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.exponentialRampToValueAtTime(0.88, time + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+      osc.connect(gain);
+      gain.connect(audio.master);
+      osc.start(time);
+      osc.stop(time + 0.2);
+    }
+
+    function playHat(time, accent) {
+      const audio = ensureAudio();
+      if (!audio || state.muted) return;
+
+      const duration = accent ? 0.055 : 0.035;
+      const bufferSize = Math.floor(audio.ctx.sampleRate * duration);
+      const buffer = audio.ctx.createBuffer(1, bufferSize, audio.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+
+      const source = audio.ctx.createBufferSource();
+      const filter = audio.ctx.createBiquadFilter();
+      const gain = audio.ctx.createGain();
+      filter.type = "highpass";
+      filter.frequency.value = 6500;
+      gain.gain.setValueAtTime(accent ? 0.28 : 0.16, time);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+      source.buffer = buffer;
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(audio.master);
+      source.start(time);
+      source.stop(time + duration);
+    }
+
+    function playPop() {
+      const audio = ensureAudio();
+      if (!audio || state.muted) return;
+
+      const time = audio.ctx.currentTime;
+      const gain = audio.ctx.createGain();
+      const osc = audio.ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(520, time);
+      osc.frequency.exponentialRampToValueAtTime(920, time + 0.06);
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.exponentialRampToValueAtTime(0.26, time + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.09);
+      osc.connect(gain);
+      gain.connect(audio.master);
+      osc.start(time);
+      osc.stop(time + 0.1);
+    }
+
+    function playError() {
+      const audio = ensureAudio();
+      if (!audio || state.muted) return;
+
+      const time = audio.ctx.currentTime;
+      const osc = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(150, time);
+      osc.frequency.exponentialRampToValueAtTime(86, time + 0.13);
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.exponentialRampToValueAtTime(0.18, time + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
+      osc.connect(gain);
+      gain.connect(audio.master);
+      osc.start(time);
+      osc.stop(time + 0.17);
+    }
+
+    function startBeatLoop(playOpeningBeat) {
+      stopBeatLoop();
+      const audio = ensureAudio();
+      if (audio && audio.ctx.state === "suspended") {
+        audio.ctx.resume();
+      }
+
+      state.lastBeatAt = nowSeconds();
+      if (playOpeningBeat) {
+        triggerBeat(true);
+      }
+      state.nextBeatAt = nowSeconds() + beatInterval();
+    }
+
+    function stopBeatLoop() {
+      if (state.beatTimer) {
+        clearInterval(state.beatTimer);
+        state.beatTimer = null;
+      }
+      state.nextBeatAt = 0;
+    }
+
+    function processBeats(currentTime) {
+      if (!state.nextBeatAt) {
+        state.nextBeatAt = currentTime + beatInterval();
+        return;
+      }
+
+      let triggered = 0;
+      while (currentTime >= state.nextBeatAt && triggered < 4) {
+        triggerBeat(false);
+        state.nextBeatAt += beatInterval();
+        triggered += 1;
+      }
+
+      if (triggered === 4 && currentTime >= state.nextBeatAt) {
+        state.nextBeatAt = currentTime + beatInterval();
+      }
+    }
+
+    function triggerBeat(forceSpawn) {
+      const audio = ensureAudio();
+      const time = audio ? audio.ctx.currentTime : 0;
+      const isDownbeat = state.beatCount % 4 === 0;
+
+      playHat(time, isDownbeat);
+      if (isDownbeat) {
+        playKick(time);
+      }
+
+      state.beatGlow = 1;
+      state.lastBeatAt = nowSeconds();
+
+      if ((forceSpawn || state.beatCount >= state.nextSpawnBeat) && state.words.length < state.config.maxWords) {
+        spawnWord();
+        state.nextSpawnBeat = state.beatCount + state.config.spawnBeats;
+      }
+
+      state.beatCount += 1;
+    }
+
+    function startGame(modeKey) {
+      stopBeatLoop();
+      if (state.rafId !== null) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+      }
+
+      state.modeKey = modeKey;
+      state.config = DIFFICULTIES[modeKey];
+      state.status = "playing";
+      state.words = [];
+      state.targetId = null;
+      state.score = 0;
+      state.combo = 0;
+      state.bestCombo = 0;
+      state.lives = 3;
+      state.nextWordId = 1;
+      state.beatCount = 0;
+      state.nextBeatAt = 0;
+      state.nextSpawnBeat = 0;
+      state.beatGlow = 0;
+      state.shakeTimer = 0;
+      state.nextStrikeAt = 0;
+      state.recentWords = [];
+      els.playfield.innerHTML = "";
+      resetWordBag();
+      updateHud();
+      setScreen("none");
+      startBeatLoop(true);
+      state.lastFrame = performance.now();
+      state.rafId = requestAnimationFrame(loop);
+    }
+
+    function endGame() {
+      state.status = "gameover";
+      stopBeatLoop();
+      if (state.rafId !== null) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+      }
+      clearWords();
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
+        writeStoredValue(STORAGE_KEYS.highScore, String(state.highScore));
+        els.gameOverCopy.textContent = "New high score. That one landed right on the beat.";
+      } else {
+        els.gameOverCopy.textContent = "Nice run. The high score table is listening.";
+      }
+      els.finalScore.textContent = state.score.toLocaleString();
+      els.bestCombo.textContent = String(state.bestCombo);
+      els.finalHigh.textContent = state.highScore.toLocaleString();
+      updateHud();
+      setScreen("over");
+    }
+
+    function pauseGame() {
+      if (state.status !== "playing") return;
+      state.status = "paused";
+      stopBeatLoop();
+      if (state.rafId !== null) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+      }
+      setScreen("pause");
+    }
+
+    function resumeGame() {
+      if (state.status !== "paused") return;
+      state.status = "playing";
+      state.lastFrame = performance.now();
+      startBeatLoop(false);
+      setScreen("none");
+      if (state.rafId !== null) {
+        cancelAnimationFrame(state.rafId);
+      }
+      state.rafId = requestAnimationFrame(loop);
+    }
+
+    function clearWords() {
+      state.words.forEach((word) => word.el.remove());
+      state.words = [];
+      state.targetId = null;
+    }
+
+    function spawnWord() {
+      const playRect = els.playfield.getBoundingClientRect();
+      const text = pickWord();
+      const el = document.createElement("div");
+      el.className = "word";
+      el.setAttribute("aria-label", text);
+      const word = {
+        id: state.nextWordId,
+        text,
+        progress: 0,
+        x: 0,
+        y: -50,
+        width: 120,
+        el
+      };
+      state.nextWordId += 1;
+      renderWord(word);
+      els.playfield.appendChild(el);
+
+      const measuredWidth = el.getBoundingClientRect().width;
+      word.width = measuredWidth;
+      const lanePadding = 18;
+      const maxX = Math.max(lanePadding, playRect.width - measuredWidth - lanePadding);
+      word.x = chooseLaneX(maxX, lanePadding);
+      word.y = -Math.max(54, el.getBoundingClientRect().height + 12);
+      word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
+      state.words.push(word);
+    }
+
+    function chooseLaneX(maxX, padding) {
+      if (!state.words.length) {
+        return Math.round(padding + Math.random() * (maxX - padding));
+      }
+
+      let bestX = padding;
+      let bestDistance = -1;
+      for (let i = 0; i < 8; i += 1) {
+        const candidate = Math.round(padding + Math.random() * (maxX - padding));
+        const nearest = state.words.reduce((min, word) => Math.min(min, Math.abs(word.x - candidate)), Infinity);
+        if (nearest > bestDistance) {
+          bestDistance = nearest;
+          bestX = candidate;
+        }
+      }
+      return bestX;
+    }
+
+    function renderWord(word) {
+      const isActive = word.id === state.targetId;
+      if (!isActive) {
+        word.el.innerHTML = "<span class=\"rest\">" + word.text + "</span>";
+        word.el.classList.remove("active");
+        return;
+      }
+
+      const typed = word.text.slice(0, word.progress);
+      const next = word.text.slice(word.progress, word.progress + 1);
+      const rest = word.text.slice(word.progress + 1);
+      word.el.innerHTML =
+        "<span class=\"typed\">" + typed + "</span>" +
+        (next ? "<span class=\"next\">" + next + "</span>" : "") +
+        "<span class=\"rest\">" + rest + "</span>";
+      word.el.classList.add("active");
+    }
+
+    function loop(timestamp) {
+      if (state.status !== "playing") {
+        state.rafId = null;
+        return;
+      }
+
+      const delta = Math.min(0.05, (timestamp - state.lastFrame) / 1000 || 0);
+      state.lastFrame = timestamp;
+      processBeats(timestamp / 1000);
+      const playHeight = els.playfield.clientHeight;
+      const lineY = playHeight - 70;
+      const fallSpeed = (playHeight + 120) / state.config.fallSeconds;
+
+      for (let i = state.words.length - 1; i >= 0; i -= 1) {
+        const word = state.words[i];
+        if (!word) {
+          continue;
+        }
+        word.y += fallSpeed * delta;
+        word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
+
+        if (word.y >= lineY) {
+          missWord(word, i);
+          if (state.status !== "playing") {
+            break;
+          }
+        }
+      }
+
+      state.beatGlow = Math.max(0, state.beatGlow - delta * 4.2);
+      state.shakeTimer = Math.max(0, state.shakeTimer - delta);
+      els.shell.style.setProperty("--beat-glow", state.beatGlow.toFixed(3));
+      els.shell.style.setProperty("--shake-x", state.shakeTimer > 0 ? (Math.sin(timestamp * 0.09) * 4).toFixed(1) + "px" : "0px");
+
+      state.rafId = requestAnimationFrame(loop);
+    }
+
+    function missWord(word, index) {
+      if (word.id === state.targetId) {
+        state.targetId = null;
+      }
+      word.el.remove();
+      state.words.splice(index, 1);
+      registerStrike();
+    }
+
+    function registerStrike() {
+      const now = nowSeconds();
+      if (now < state.nextStrikeAt) {
+        return;
+      }
+
+      state.combo = 0;
+      state.lives -= 1;
+      state.shakeTimer = 0.32;
+      state.nextStrikeAt = now + state.config.strikeGraceSeconds;
+      playError();
+      updateHud();
+      if (state.lives <= 0) {
+        endGame();
+      }
+    }
+
+    function handleKeydown(event) {
+      if (event.key === "Escape") {
+        if (state.status === "playing") {
+          pauseGame();
+        } else if (state.status === "paused") {
+          resumeGame();
+        }
+        return;
+      }
+
+      if (state.status !== "playing") {
+        return;
+      }
+
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        clearTarget();
+        return;
+      }
+
+      if (event.key.length !== 1 || !/^[a-z]$/i.test(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      typeLetter(event.key.toLowerCase());
+    }
+
+    function typeLetter(letter) {
+      let target = state.words.find((word) => word.id === state.targetId);
+
+      if (!target) {
+        target = pickTargetForLetter(letter);
+        if (target) {
+          state.targetId = target.id;
+        }
+      }
+
+      if (!target) {
+        pulseWrong(null);
+        return;
+      }
+
+      const expected = target.text[target.progress];
+      if (expected === letter) {
+        target.progress += 1;
+        target.el.classList.remove("bump");
+        target.el.offsetWidth;
+        target.el.classList.add("bump");
+        renderWord(target);
+
+        if (target.progress >= target.text.length) {
+          clearWord(target);
+        }
+      } else {
+        pulseWrong(target);
+      }
+    }
+
+    function pickTargetForLetter(letter) {
+      return state.words
+        .filter((word) => word.text[word.progress] === letter)
+        .sort((a, b) => b.y - a.y)[0] || null;
+    }
+
+    function clearTarget() {
+      const current = state.words.find((word) => word.id === state.targetId);
+      if (current) {
+        current.progress = 0;
+        state.targetId = null;
+        renderWord(current);
+      }
+    }
+
+    function pulseWrong(word) {
+      const target = word || state.words.find((item) => item.id === state.targetId);
+      if (target) {
+        target.el.classList.remove("wrong");
+        target.el.offsetWidth;
+        target.el.classList.add("wrong");
+      }
+      state.shakeTimer = 0.12;
+      playError();
+    }
+
+    function clearWord(word) {
+      const index = state.words.findIndex((item) => item.id === word.id);
+      if (index === -1) return;
+
+      const rect = word.el.getBoundingClientRect();
+      const playRect = els.playfield.getBoundingClientRect();
+      const x = rect.left - playRect.left + rect.width / 2;
+      const y = rect.top - playRect.top + rect.height / 2;
+      const nextCombo = state.combo + 1;
+      const multiplier = comboMultiplierFor(nextCombo);
+      const points = Math.round((state.config.basePoints + word.text.length * 12) * multiplier);
+
+      state.score += points;
+      state.combo = nextCombo;
+      state.bestCombo = Math.max(state.bestCombo, state.combo);
+      state.targetId = null;
+      word.el.remove();
+      state.words.splice(index, 1);
+      spawnBurst(x, y, points);
+      playPop();
+      updateHud();
+    }
+
+    function spawnBurst(x, y, points) {
+      const colors = ["#2ee9ff", "#c6ff4d", "#ff4d9a", "#ffb347"];
+      for (let i = 0; i < 22; i += 1) {
+        const particle = document.createElement("span");
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 24 + Math.random() * 58;
+        particle.className = "particle";
+        particle.style.left = x + "px";
+        particle.style.top = y + "px";
+        particle.style.setProperty("--dx", Math.cos(angle) * distance);
+        particle.style.setProperty("--dy", Math.sin(angle) * distance);
+        particle.style.setProperty("--particle-color", colors[i % colors.length]);
+        els.playfield.appendChild(particle);
+        particle.addEventListener("animationend", () => particle.remove(), { once: true });
+      }
+
+      const float = document.createElement("span");
+      float.className = "floating-score";
+      float.textContent = "+" + points;
+      float.style.left = x + "px";
+      float.style.top = y + "px";
+      els.playfield.appendChild(float);
+      float.addEventListener("animationend", () => float.remove(), { once: true });
+    }
+
+    function toggleMute() {
+      state.muted = !state.muted;
+      writeStoredValue(STORAGE_KEYS.muted, String(state.muted));
+      updateMuteButton();
+    }
+
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => startGame(button.dataset.mode));
+    });
+
+    els.retry.addEventListener("click", () => startGame(state.modeKey));
+    els.mode.addEventListener("click", () => {
+      state.status = "start";
+      clearWords();
+      setScreen("start");
+    });
+    els.resume.addEventListener("click", resumeGame);
+    els.pauseMode.addEventListener("click", () => {
+      state.status = "start";
+      stopBeatLoop();
+      clearWords();
+      setScreen("start");
+    });
+    els.mute.addEventListener("click", toggleMute);
+    window.addEventListener("keydown", handleKeydown);
+    window.addEventListener("blur", pauseGame);
+
+    updateMuteButton();
+    updateHud();
+  </script>
+</body>
+</html>

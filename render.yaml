@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: beattype-drop
+    runtime: static
+    repo: https://github.com/kdeverett918/beattype-drop
+    branch: main
+    buildCommand: "true"
+    staticPublishPath: .
+    autoDeployTrigger: commit
+    previews:
+      generation: manual
