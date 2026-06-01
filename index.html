@@ -97,6 +97,24 @@
       opacity: 0.28;
     }
 
+    .game-shell.mode-beginner {
+      background:
+        radial-gradient(circle at 24% 18%, rgba(46, 233, 255, calc(0.09 + var(--beat-glow) * 0.10)), transparent 34%),
+        radial-gradient(circle at 76% 80%, rgba(198, 255, 77, calc(0.05 + var(--beat-glow) * 0.08)), transparent 38%),
+        linear-gradient(135deg, #06101a 0%, #081827 48%, #0b1420 100%);
+    }
+
+    .game-shell.mode-beginner::before {
+      background-size: 88px 88px;
+      opacity: calc(0.14 + var(--beat-glow) * 0.08);
+    }
+
+    .game-shell.mode-beginner::after {
+      background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent 42%, rgba(46, 233, 255, 0.035));
+      opacity: 0.16;
+    }
+
     .hud {
       position: absolute;
       top: 16px;
@@ -334,7 +352,7 @@
 
     .difficulty-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
       margin-top: 22px;
     }
@@ -651,11 +669,15 @@
         <div class="difficulty-grid" aria-label="Choose practice track">
           <button class="difficulty-button" type="button" data-mode="beginner">
             <span class="mode-name">Beginner</span>
-            <span class="mode-details">Short words / 92 BPM / steady warm-up</span>
+            <span class="mode-details">Tiny words / 70 BPM / calm start</span>
+          </button>
+          <button class="difficulty-button" type="button" data-mode="intermediate">
+            <span class="mode-name">Intermediate</span>
+            <span class="mode-details">Core words / 104 BPM / steady rhythm</span>
           </button>
           <button class="difficulty-button" type="button" data-mode="advanced">
             <span class="mode-name">Advanced</span>
-            <span class="mode-details">Mixed words / 132 BPM / faster streaks</span>
+            <span class="mode-details">Longer words / 132 BPM / faster streaks</span>
           </button>
         </div>
         <div class="quick-help" aria-label="Controls">
@@ -717,35 +739,50 @@
     const CUSTOM_WORDS = [];
 
     const BUILT_IN_WORDS = [
-      "able", "about", "after", "again", "air", "also", "always", "apple", "around", "back",
+      "add", "air", "and", "ask", "bag", "can", "day", "fun", "get", "hop",
+      "joy", "key", "run", "see", "sun", "tap", "the", "try", "use", "yes",
+      "able", "about", "after", "again", "also", "always", "apple", "around", "back",
       "ball", "base", "beat", "best", "bird", "blue", "book", "bring", "build", "call",
       "carry", "clean", "close", "dance", "dream", "early", "earth", "every", "field", "final",
       "fire", "fresh", "friend", "garden", "green", "happy", "heart", "house", "human", "kind",
       "light", "little", "magic", "market", "music", "night", "open", "paper", "party", "place",
       "plant", "quick", "river", "round", "shine", "small", "sound", "space", "story", "sweet",
-      "table", "thing", "today", "water", "window", "world"
+      "table", "thing", "today", "water", "window", "world", "another", "because", "between",
+      "keyboard", "learning", "morning", "picture", "practice", "reading", "sentence", "teacher",
+      "together"
     ];
 
     const DIFFICULTIES = {
       beginner: {
         label: "Beginner",
-        bpm: 92,
-        fallSeconds: 10.4,
-        spawnBeats: 3,
+        bpm: 70,
+        fallSeconds: 18,
+        spawnBeats: 5,
         minLength: 3,
-        maxLength: 5,
-        maxWords: 6,
-        basePoints: 90,
-        strikeGraceSeconds: 0.85
+        maxLength: 4,
+        maxWords: 3,
+        basePoints: 70,
+        strikeGraceSeconds: 1.25
+      },
+      intermediate: {
+        label: "Intermediate",
+        bpm: 104,
+        fallSeconds: 11,
+        spawnBeats: 4,
+        minLength: 4,
+        maxLength: 6,
+        maxWords: 5,
+        basePoints: 105,
+        strikeGraceSeconds: 0.95
       },
       advanced: {
         label: "Advanced",
         bpm: 132,
         fallSeconds: 7.8,
         spawnBeats: 2,
-        minLength: 4,
+        minLength: 5,
         maxLength: 8,
-        maxWords: 9,
+        maxWords: 8,
         basePoints: 130,
         strikeGraceSeconds: 0.7
       }
@@ -885,6 +922,13 @@
       els.start.classList.toggle("hidden", which !== "start");
       els.over.classList.toggle("hidden", which !== "over");
       els.pause.classList.toggle("hidden", which !== "pause");
+    }
+
+    function setShellMode(modeKey) {
+      els.shell.classList.remove("mode-beginner", "mode-intermediate", "mode-advanced");
+      if (modeKey && DIFFICULTIES[modeKey]) {
+        els.shell.classList.add("mode-" + modeKey);
+      }
     }
 
     function updateHud() {
@@ -1083,6 +1127,7 @@
 
       state.modeKey = DIFFICULTIES[modeKey] ? modeKey : "beginner";
       state.config = DIFFICULTIES[state.modeKey];
+      setShellMode(state.modeKey);
       state.status = "playing";
       state.words = [];
       state.targetId = null;
@@ -1469,6 +1514,7 @@
     els.mode.addEventListener("click", () => {
       state.status = "start";
       clearWords();
+      setShellMode(null);
       setScreen("start");
     });
     els.resume.addEventListener("click", resumeGame);
@@ -1476,6 +1522,7 @@
       state.status = "start";
       stopBeatLoop();
       clearWords();
+      setShellMode(null);
       setScreen("start");
     });
     els.mute.addEventListener("click", toggleMute);

@@ -2,7 +2,7 @@
 
 A single-file rhythm typing arcade game. Words fall on the beat, and the player clears each word by typing it before it reaches the drop line.
 
-The game includes Beginner and Advanced practice tracks, streak bonuses, three-strike runs, and local high score storage.
+The game includes a calmer Beginner track, stepped Intermediate and Advanced tracks, streak bonuses, three-strike runs, and local high score storage.
 
 ## Play Locally
 
