@@ -1230,7 +1230,10 @@
       audio: null,
       beatTimer: null,
       wordBag: [],
-      recentWords: []
+      recentWords: [],
+      musicBuffers: {},
+      musicSource: null,
+      musicToken: 0
     };
 
     function readStoredValue(key, fallback) {
@@ -1359,9 +1362,13 @@
       els.soundOff.hidden = !state.muted;
       els.mute.setAttribute("aria-label", state.muted ? "Unmute sound" : "Mute sound");
       if (state.audio && state.audio.master) {
-        state.audio.master.gain.setTargetAtTime(state.muted ? 0 : 0.78, state.audio.ctx.currentTime, 0.025);
+        state.audio.master.gain.setTargetAtTime(state.muted ? 0 : MASTER_LEVEL, state.audio.ctx.currentTime, 0.025);
       }
     }
+
+    const MASTER_LEVEL = 0.9;
+    const SFX_LEVEL = 0.55;
+    const MUSIC_LEVEL = 0.5;
 
     function ensureAudio() {
       if (state.audio) {
@@ -1374,14 +1381,35 @@
       }
 
       const ctx = new AudioContext();
-      const master = ctx.createGain();
-      master.gain.value = state.muted ? 0 : 0.78;
-      master.connect(ctx.destination);
 
-      state.audio = { ctx, master };
+      // master -> limiter -> destination. Master is the mute control.
+      const master = ctx.createGain();
+      master.gain.value = state.muted ? 0 : MASTER_LEVEL;
+
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 6;
+      limiter.ratio.value = 12;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.18;
+
+      master.connect(limiter);
+      limiter.connect(ctx.destination);
+
+      // Separate buses so music sits politely under the effects and can duck.
+      const sfx = ctx.createGain();
+      sfx.gain.value = SFX_LEVEL;
+      sfx.connect(master);
+
+      const music = ctx.createGain();
+      music.gain.value = 0.0001;
+      music.connect(master);
+
+      state.audio = { ctx, master, limiter, sfx, music };
       return state.audio;
     }
 
+    // Soft, rounded kick — used only as a fallback heartbeat when no music track is playing.
     function playKick(time) {
       const audio = ensureAudio();
       if (!audio || state.muted) return;
@@ -1389,80 +1417,176 @@
       const osc = audio.ctx.createOscillator();
       const gain = audio.ctx.createGain();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(140, time);
-      osc.frequency.exponentialRampToValueAtTime(46, time + 0.14);
+      osc.frequency.setValueAtTime(120, time);
+      osc.frequency.exponentialRampToValueAtTime(48, time + 0.12);
       gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(0.88, time + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.5, time + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.22);
       osc.connect(gain);
-      gain.connect(audio.master);
+      gain.connect(audio.sfx);
       osc.start(time);
-      osc.stop(time + 0.2);
+      osc.stop(time + 0.24);
     }
 
-    function playHat(time, accent) {
+    // C major pentatonic — the cleared word rings a note that climbs with your combo, then caps.
+    const CLEAR_SCALE = [0, 2, 4, 7, 9];
+    const CLEAR_BASE_HZ = 523.25; // C5
+    const CLEAR_MAX_HZ = 1568;    // ~G6, so big streaks stay sweet, not shrill
+
+    function playClear(combo) {
       const audio = ensureAudio();
       if (!audio || state.muted) return;
 
-      const duration = accent ? 0.055 : 0.035;
-      const bufferSize = Math.floor(audio.ctx.sampleRate * duration);
-      const buffer = audio.ctx.createBuffer(1, bufferSize, audio.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i += 1) {
-        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-      }
+      const t = audio.ctx.currentTime;
+      const step = Math.max(0, (combo || 1) - 1);
+      const degree = CLEAR_SCALE[step % CLEAR_SCALE.length];
+      const octave = Math.min(2, Math.floor(step / CLEAR_SCALE.length));
+      const freq = Math.min(CLEAR_MAX_HZ, CLEAR_BASE_HZ * Math.pow(2, (degree + octave * 12) / 12));
 
-      const source = audio.ctx.createBufferSource();
+      // Bell-ish: fundamental + a soft octave shimmer.
+      [[freq, 0.5], [freq * 2, 0.16]].forEach(([f, amp]) => {
+        const osc = audio.ctx.createOscillator();
+        const gain = audio.ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(amp, t + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        osc.connect(gain);
+        gain.connect(audio.sfx);
+        osc.start(t);
+        osc.stop(t + 0.55);
+      });
+    }
+
+    // Wrong key: a tiny muted blip, low and quiet — a nudge, not a buzzer.
+    function playWrongKey() {
+      const audio = ensureAudio();
+      if (!audio || state.muted) return;
+
+      const t = audio.ctx.currentTime;
+      const osc = audio.ctx.createOscillator();
+      const gain = audio.ctx.createGain();
       const filter = audio.ctx.createBiquadFilter();
-      const gain = audio.ctx.createGain();
-      filter.type = "highpass";
-      filter.frequency.value = 6500;
-      gain.gain.setValueAtTime(accent ? 0.28 : 0.16, time);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-      source.buffer = buffer;
-      source.connect(filter);
-      filter.connect(gain);
-      gain.connect(audio.master);
-      source.start(time);
-      source.stop(time + duration);
-    }
-
-    function playPop() {
-      const audio = ensureAudio();
-      if (!audio || state.muted) return;
-
-      const time = audio.ctx.currentTime;
-      const gain = audio.ctx.createGain();
-      const osc = audio.ctx.createOscillator();
       osc.type = "triangle";
-      osc.frequency.setValueAtTime(520, time);
-      osc.frequency.exponentialRampToValueAtTime(920, time + 0.06);
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(0.26, time + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.09);
-      osc.connect(gain);
-      gain.connect(audio.master);
-      osc.start(time);
-      osc.stop(time + 0.1);
+      osc.frequency.setValueAtTime(196, t);
+      osc.frequency.exponentialRampToValueAtTime(150, t + 0.08);
+      filter.type = "lowpass";
+      filter.frequency.value = 900;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.14, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(audio.sfx);
+      osc.start(t);
+      osc.stop(t + 0.14);
     }
 
-    function playError() {
+    // Missed word: a soft descending two-step "aww", filtered so it never bites.
+    function playMiss() {
       const audio = ensureAudio();
       if (!audio || state.muted) return;
 
-      const time = audio.ctx.currentTime;
+      const t = audio.ctx.currentTime;
       const osc = audio.ctx.createOscillator();
       const gain = audio.ctx.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(150, time);
-      osc.frequency.exponentialRampToValueAtTime(86, time + 0.13);
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(0.18, time + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
-      osc.connect(gain);
-      gain.connect(audio.master);
-      osc.start(time);
-      osc.stop(time + 0.17);
+      const filter = audio.ctx.createBiquadFilter();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(311, t);
+      osc.frequency.exponentialRampToValueAtTime(196, t + 0.22);
+      filter.type = "lowpass";
+      filter.frequency.value = 1400;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(audio.sfx);
+      osc.start(t);
+      osc.stop(t + 0.36);
+      duckMusic();
+    }
+
+    // ---- Background music: per-mode loops, fully optional ----
+    // If a track file is missing or fails to decode, the game just runs on the
+    // soft fallback kick — nothing breaks.
+    const MUSIC_TRACKS = {
+      beginner: "audio/beginner.mp3",
+      intermediate: "audio/intermediate.mp3",
+      advanced: "audio/advanced.mp3"
+    };
+
+    function isMusicPlaying() {
+      return !!(state.audio && state.musicSource);
+    }
+
+    async function loadMusicBuffer(mode) {
+      const audio = ensureAudio();
+      if (!audio) return null;
+      if (state.musicBuffers[mode]) return state.musicBuffers[mode];
+      const url = MUSIC_TRACKS[mode];
+      if (!url) return null;
+      try {
+        const res = await fetch(url, { cache: "force-cache" });
+        if (!res.ok) return null;
+        const data = await res.arrayBuffer();
+        const buffer = await audio.ctx.decodeAudioData(data);
+        state.musicBuffers[mode] = buffer;
+        return buffer;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function stopMusic(fadeSeconds) {
+      const audio = state.audio;
+      state.musicToken += 1; // cancel any in-flight startMusic
+      if (!audio || !state.musicSource) return;
+      const source = state.musicSource;
+      state.musicSource = null;
+      const fade = typeof fadeSeconds === "number" ? fadeSeconds : 0.25;
+      const now = audio.ctx.currentTime;
+      try {
+        audio.music.gain.cancelScheduledValues(now);
+        audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+        audio.music.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+        source.stop(now + fade + 0.02);
+      } catch (error) {
+        try { source.stop(); } catch (e) {}
+      }
+    }
+
+    async function startMusic(mode) {
+      const audio = ensureAudio();
+      if (!audio) return;
+      stopMusic(0.1);
+      const token = state.musicToken;
+      const buffer = await loadMusicBuffer(mode);
+      // Bail if the player changed mode or left play while we were loading.
+      if (!buffer || token !== state.musicToken || state.status !== "playing" || state.modeKey !== mode) {
+        return;
+      }
+      const source = audio.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(audio.music);
+      const now = audio.ctx.currentTime;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(0.0001, now);
+      audio.music.gain.exponentialRampToValueAtTime(MUSIC_LEVEL, now + 0.9);
+      source.start(now);
+      state.musicSource = source;
+    }
+
+    function duckMusic() {
+      const audio = state.audio;
+      if (!audio || !state.musicSource) return;
+      const now = audio.ctx.currentTime;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+      audio.music.gain.linearRampToValueAtTime(MUSIC_LEVEL * 0.32, now + 0.06);
+      audio.music.gain.linearRampToValueAtTime(MUSIC_LEVEL, now + 0.55);
     }
 
     function startBeatLoop(playOpeningBeat) {
@@ -1510,8 +1634,8 @@
       const time = audio ? audio.ctx.currentTime : 0;
       const isDownbeat = state.beatCount % 4 === 0;
 
-      playHat(time, isDownbeat);
-      if (isDownbeat) {
+      // Music carries the groove. Only fall back to a soft kick when no track is playing.
+      if (!isMusicPlaying() && isDownbeat) {
         playKick(time);
       }
 
@@ -1556,6 +1680,7 @@
       updateHud();
       setScreen("none");
       startBeatLoop(true);
+      startMusic(state.modeKey);
       state.lastFrame = performance.now();
       state.rafId = requestAnimationFrame(loop);
     }
@@ -1563,6 +1688,7 @@
     function endGame() {
       state.status = "gameover";
       stopBeatLoop();
+      stopMusic(0.6);
       if (state.rafId !== null) {
         cancelAnimationFrame(state.rafId);
         state.rafId = null;
@@ -1590,6 +1716,10 @@
       if (state.status !== "playing") return;
       state.status = "paused";
       stopBeatLoop();
+      // Suspend the context so the looping music pauses in place; resumeGame resumes it.
+      if (state.audio && state.audio.ctx.state === "running") {
+        state.audio.ctx.suspend();
+      }
       if (state.rafId !== null) {
         cancelAnimationFrame(state.rafId);
         state.rafId = null;
@@ -1742,7 +1872,7 @@
       state.shakeTimer = 0.32;
       state.nextStrikeAt = now + state.config.strikeGraceSeconds;
       flashMiss();
-      playError();
+      playMiss();
       updateHud();
       if (state.lives <= 0) {
         endGame();
@@ -1836,7 +1966,7 @@
         target.el.classList.add("wrong");
       }
       state.shakeTimer = 0.12;
-      playError();
+      playWrongKey();
     }
 
     function clearWord(word) {
@@ -1861,7 +1991,7 @@
       if (state.combo > 0 && state.combo % 5 === 0) {
         spawnFloatingLabel(x, y - 28, "STREAK " + state.combo, "#2ee9ff");
       }
-      playPop();
+      playClear(state.combo);
       updateHud();
     }
 
@@ -1944,6 +2074,7 @@
     els.retry.addEventListener("click", () => startGame(state.modeKey));
     els.mode.addEventListener("click", () => {
       state.status = "start";
+      stopMusic(0.2);
       clearWords();
       setShellMode(null);
       setScreen("start");
@@ -1952,6 +2083,10 @@
     els.pauseMode.addEventListener("click", () => {
       state.status = "start";
       stopBeatLoop();
+      if (state.audio && state.audio.ctx.state === "suspended") {
+        state.audio.ctx.resume();
+      }
+      stopMusic(0.2);
       clearWords();
       setShellMode(null);
       setScreen("start");
