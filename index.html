@@ -348,7 +348,9 @@
 
     .playfield {
       position: absolute;
-      inset: 112px 0 76px;
+      /* Extends to the shell bottom so words can visually reach the danger line
+         (bottom: 70px) before the miss check removes them. */
+      inset: 112px 0 0;
       overflow: hidden;
     }
 
@@ -1254,7 +1256,7 @@
       }
 
       .playfield {
-        inset: 118px 0 70px;
+        inset: 118px 0 0;
       }
 
       .hud-sub {
@@ -2724,6 +2726,7 @@
         x: 0,
         y: -50,
         width: 120,
+        height: 44,
         el,
         power: powerType || null,
         errors: 0,
@@ -2739,6 +2742,7 @@
 
       const rect = el.getBoundingClientRect();
       word.width = rect.width;
+      word.height = rect.height;
       const lanePadding = 18;
       const maxX = Math.max(lanePadding, playRect.width - rect.width - lanePadding);
       word.x = chooseLaneX(maxX, lanePadding);
@@ -2815,13 +2819,15 @@
         word.y += fallSpeed * delta;
         word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
 
+        // Collision uses the word's BOTTOM edge so it visually touches the line before dying.
+        const bottom = word.y + word.height;
         // Only touch the DOM when the proximity state actually changes (avoids per-frame recalc).
-        const near = word.y >= lineY - 150;
-        const peril = word.y >= lineY - 48;
+        const near = bottom >= lineY - 150;
+        const peril = bottom >= lineY - 48;
         if (near !== word._near) { word.el.classList.toggle("near", near); word._near = near; }
         if (peril !== word._peril) { word.el.classList.toggle("peril", peril); word._peril = peril; }
 
-        if (word.y >= lineY) {
+        if (bottom >= lineY) {
           missWord(word, i);
           if (state.status !== "playing") {
             break;
@@ -2847,6 +2853,7 @@
       if (word.id === state.targetId) {
         state.targetId = null;
       }
+      spawnMissBurst(word.x + word.width / 2, word.y + word.height);
       word.el.remove();
       state.words.splice(index, 1);
       registerStrike();
@@ -3169,6 +3176,31 @@
       float.style.top = y + "px";
       els.playfield.appendChild(float);
       float.addEventListener("animationend", () => float.remove(), { once: true });
+    }
+
+    function spawnMissBurst(x, y) {
+      if (state.reducedMotion) return;
+      const ring = document.createElement("span");
+      ring.className = "shockwave";
+      ring.style.left = x + "px";
+      ring.style.top = y + "px";
+      ring.style.setProperty("--shock-color", "var(--c-danger)");
+      els.playfield.appendChild(ring);
+      ring.addEventListener("animationend", () => ring.remove(), { once: true });
+
+      for (let i = 0; i < 12; i += 1) {
+        const particle = document.createElement("span");
+        const angle = -Math.random() * Math.PI; // scatter upward off the line
+        const distance = 20 + Math.random() * 46;
+        particle.className = "particle";
+        particle.style.left = x + "px";
+        particle.style.top = y + "px";
+        particle.style.setProperty("--dx", Math.cos(angle) * distance);
+        particle.style.setProperty("--dy", Math.sin(angle) * distance);
+        particle.style.setProperty("--particle-color", "var(--c-danger)");
+        els.playfield.appendChild(particle);
+        particle.addEventListener("animationend", () => particle.remove(), { once: true });
+      }
     }
 
     function spawnFloatingLabel(x, y, text, color) {
