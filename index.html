@@ -730,6 +730,18 @@
       opacity: 1;
     }
 
+    /* Remembered mode (radio "checked") — Enter starts this one */
+    .difficulty-button.selected {
+      border-color: color-mix(in srgb, var(--m-accent, var(--c-cyan)) 80%, transparent);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 55%, transparent),
+        0 0 24px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 22%, transparent);
+    }
+
+    .difficulty-button.selected::before {
+      opacity: 1;
+    }
+
     .mode-name {
       display: block;
       font-family: "Space Grotesk", sans-serif;
@@ -1352,6 +1364,38 @@
       line-height: 1.45;
     }
 
+    /* Screen-reader-only live region for gameplay announcements */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      clip-path: inset(50%);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* ---- Touch mode: hidden text input (summons the soft keyboard) + pause ---- */
+    .touch-input {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      border: 0;
+      opacity: 0.01;
+      background: transparent;
+      color: transparent;
+      font-size: 16px; /* >=16px stops iOS from zooming on focus */
+      pointer-events: none;
+    }
+
+    .touch-pause { display: none; }
+    .game-shell.touch.play-active .touch-pause { display: grid; }
+
     /* ---- Forced reduced motion via Settings toggle ---- */
     .game-shell.reduced *,
     .game-shell.reduced *::before,
@@ -1583,20 +1627,28 @@
           <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"></path>
         </svg>
       </button>
+      <button class="mute-button touch-pause" id="touchPauseButton" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 5v14M15 5v14"></path>
+        </svg>
+      </button>
     </div>
 
     <div class="fever-meter" id="feverMeter" aria-hidden="true"><i id="feverFill"></i></div>
 
-    <section class="playfield" id="playfield" aria-label="Falling words"></section>
+    <section class="playfield" id="playfield" aria-hidden="true"></section>
     <div class="danger-line" aria-hidden="true"></div>
     <div class="miss-flash" aria-hidden="true"></div>
     <div class="countdown" id="countdown" aria-hidden="true"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="visually-hidden" id="srAnnounce" aria-live="polite"></div>
+    <input class="touch-input" id="touchInput" type="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
 
     <section class="screen" id="startScreen">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
         <div class="mobile-banner" id="mobileBanner" hidden>
-          ⌨️ BeatType Drop is built for a physical keyboard — hop on a laptop or desktop to play.
+          ⌨️ BeatType Drop plays best with a physical keyboard. On touch, the on-screen
+          keyboard pops up when the round starts — use the ⏸ button up top to pause.
         </div>
         <div class="eyebrow">Typing Rhythm Lab</div>
         <h1 id="startTitle">BeatType Drop</h1>
@@ -1607,21 +1659,21 @@
         <div class="start-profile" id="startProfile" aria-label="Your stats"></div>
         <div class="picker-label">Difficulty <span>— sets speed &amp; words</span></div>
         <div class="difficulty-grid" role="radiogroup" aria-label="Choose difficulty">
-          <button class="difficulty-button" type="button" data-mode="beginner">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="true" data-mode="beginner">
             <span class="mode-name">Beginner</span>
             <span class="mode-details">Warm up &middot; tiny words &middot; calm</span>
             <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
             <span class="mode-key" aria-hidden="true">1</span>
           </button>
-          <button class="difficulty-button" type="button" data-mode="intermediate">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="false" data-mode="intermediate">
             <span class="mode-name">Intermediate</span>
             <span class="mode-details">In the pocket &middot; core words</span>
             <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span>
             <span class="mode-key" aria-hidden="true">2</span>
           </button>
-          <button class="difficulty-button" type="button" data-mode="advanced">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="false" data-mode="advanced">
             <span class="mode-name">Advanced</span>
             <span class="mode-details">Full send &middot; long words &middot; fast</span>
             <span class="mode-best"></span>
@@ -1633,7 +1685,7 @@
         <div class="song-picker" id="songPicker" role="radiogroup" aria-label="Choose soundtrack"></div>
         <div class="quick-help" aria-label="How to play">
           <span class="pill">Just type — it locks the lowest match</span>
-          <span class="pill"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> pick &middot; <kbd>Enter</kbd> start</span>
+          <span class="pill"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> start instantly &middot; <kbd>Enter</kbd> starts selected</span>
           <span class="pill"><kbd>Esc</kbd> pause</span>
         </div>
         <div class="legend" aria-label="Power-ups">
@@ -1948,6 +2000,8 @@
       wordErrors: 0,
       reducedMotion: false,
       countdownTimer: null,
+      countdownHeld: false,
+      settingsOpener: null,
       settings: loadSettings(),
       profile: loadProfile()
     };
@@ -1992,10 +2046,33 @@
       try {
         const raw = JSON.parse(readStoredValue(STORAGE_KEYS.profile, "null"));
         if (raw && typeof raw === "object") {
-          return Object.assign(base, raw, {
-            best: raw.best || {},
-            keys: raw.keys || {}
-          });
+          // Coerce every numeric field — a legacy/hand-edited profile holding
+          // strings would otherwise concat ("120" + 8 = "1208") and re-persist.
+          const best = {};
+          const rawBest = raw.best && typeof raw.best === "object" ? raw.best : {};
+          for (const mode in rawBest) {
+            const b = rawBest[mode] || {};
+            best[mode] = {
+              score: Number(b.score) || 0,
+              wpm: Number(b.wpm) || 0,
+              combo: Number(b.combo) || 0,
+              level: Number(b.level) || 1
+            };
+          }
+          const keys = {};
+          const rawKeys = raw.keys && typeof raw.keys === "object" ? raw.keys : {};
+          for (const k in rawKeys) {
+            const r = rawKeys[k] || {};
+            keys[k] = { hit: Number(r.hit) || 0, miss: Number(r.miss) || 0 };
+          }
+          return {
+            streak: Number(raw.streak) || 0,
+            lastPlayed: typeof raw.lastPlayed === "string" ? raw.lastPlayed : "",
+            lifetimeWords: Number(raw.lifetimeWords) || 0,
+            runs: Number(raw.runs) || 0,
+            best,
+            keys
+          };
         }
       } catch (error) {}
       return base;
@@ -2123,6 +2200,42 @@
       els.start.classList.toggle("hidden", which !== "start");
       els.over.classList.toggle("hidden", which !== "over");
       els.pause.classList.toggle("hidden", which !== "pause");
+      updateModalGuards();
+    }
+
+    // The topmost open aria-modal dialog (settings stacks above the others).
+    function openModalEl() {
+      if (settingsOpen()) return els.settingsScreen;
+      if (els.start && !els.start.classList.contains("hidden")) return els.start;
+      if (els.over && !els.over.classList.contains("hidden")) return els.over;
+      if (els.pause && !els.pause.classList.contains("hidden")) return els.pause;
+      return null;
+    }
+
+    // HUD buttons must not be keyboard-reachable while a modal dialog is open
+    // (they stay mouse-clickable; the focus trap owns Tab order).
+    function updateModalGuards() {
+      const open = !!openModalEl();
+      [els.mute, els.settingsButton].forEach((button) => {
+        if (button) button.tabIndex = open ? -1 : 0;
+      });
+    }
+
+    // Minimal focus trap: Tab cycles through the open dialog's controls only.
+    function trapTab(event, modal) {
+      event.preventDefault();
+      const focusables = Array.from(modal.querySelectorAll(
+        "button:not([disabled]):not([tabindex='-1']), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex='0']"
+      )).filter((el) => el.offsetParent !== null);
+      if (!focusables.length) return;
+      const index = focusables.indexOf(document.activeElement);
+      let next;
+      if (event.shiftKey) {
+        next = index <= 0 ? focusables[focusables.length - 1] : focusables[index - 1];
+      } else {
+        next = index === -1 || index === focusables.length - 1 ? focusables[0] : focusables[index + 1];
+      }
+      try { next.focus(); } catch (error) {}
     }
 
     function setShellMode(modeKey) {
@@ -2234,6 +2347,7 @@
       const pr = els.playfield.getBoundingClientRect();
       spawnFloatingLabel(pr.width / 2, 64, "LEVEL " + state.level, "#c6ff4d");
       playLevelUp();
+      announce("Level " + state.level);
     }
 
     // ---- Fever / overdrive ----
@@ -2276,6 +2390,7 @@
       const pr = els.playfield.getBoundingClientRect();
       spawnFloatingLabel(pr.width / 2, 112, "FEVER!", "#ff4d9a");
       playFever();
+      announce("Fever — double points");
     }
 
     function endFever() {
@@ -2339,7 +2454,9 @@
 
     function updateLiveStats() {
       const wpm = currentWpm();
-      if (wpm > state.peakWpm) state.peakWpm = wpm;
+      // Peak only publishes after ~3s of active typing — one fast early word
+      // can't pin an inflated number for the whole run.
+      if (state.activeMs >= 3000 && wpm > state.peakWpm) state.peakWpm = wpm;
       if (els.wpm) els.wpm.textContent = wpm;
       if (els.acc) els.acc.textContent = currentAccuracy() + "%";
     }
@@ -2395,6 +2512,8 @@
         spawnFloatingLabel(x, y - 30, def.label + (pts ? " +" + pts : ""), def.color);
       }
       playPower(type);
+      const srMsg = { bonus: "Bonus points", life: "Extra life", slow: "Slow motion", clear: "Screen cleared" }[type];
+      if (srMsg) announce(srMsg);
     }
 
     function updateMuteButton() {
@@ -2881,6 +3000,7 @@
       state.config = deriveConfig(state.baseConfig, 1);
       setShellMode(state.modeKey);
       state.status = "countdown";
+      state.countdownHeld = false;
       state.words = [];
       state.targetId = null;
       state.score = 0;
@@ -2930,20 +3050,26 @@
       closeSettings();
       setScreen("none");
       els.shell.classList.add("play-active");
+      updateDifficultySelection();
+      // Focus inside the tap gesture so the soft keyboard is allowed to appear.
+      focusTouchInput();
       startCountdown();
     }
 
     // 3-2-1-GO on-beat countdown so first-timers get their hands ready.
-    function startCountdown() {
+    // With `resume` set it runs a short READY-GO and unfreezes the paused run
+    // instead of resetting anything.
+    function startCountdown(resume) {
       cancelCountdown();
       ensureAudio();
       if (state.audio && state.audio.ctx.state === "suspended") {
         state.audio.ctx.resume();
       }
-      const steps = ["3", "2", "1", "GO"];
+      const steps = resume ? ["READY", "GO"] : ["3", "2", "1", "GO"];
+      const expected = resume ? "resuming" : "countdown";
       let i = 0;
       const tick = () => {
-        if (state.status !== "countdown") return;
+        if (state.status !== expected) return;
         const label = steps[i];
         if (els.countdown) {
           els.countdown.textContent = label;
@@ -2957,11 +3083,24 @@
         } else {
           state.countdownTimer = window.setTimeout(() => {
             if (els.countdown) els.countdown.classList.remove("show");
-            beginPlay();
+            if (resume) completeResume();
+            else beginPlay();
           }, 450);
         }
       };
       tick();
+    }
+
+    // Esc / tab-hide during the 3-2-1: freeze the countdown instead of
+    // discarding the run. showPause surfaces the pause dialog (Esc path);
+    // the tab-hide path holds silently and auto-restarts on return.
+    function holdCountdown(showPause) {
+      cancelCountdown();
+      state.countdownHeld = true;
+      if (showPause) {
+        setScreen("pause");
+        focusFirst(els.pause);
+      }
     }
 
     function beginPlay() {
@@ -2973,6 +3112,7 @@
       state.activeMs = 0;
       startBeatLoop(true);
       startMusic(state.trackKey);
+      focusTouchInput(); // keep the soft keyboard up if it was dismissed mid-countdown
       state.lastFrame = performance.now();
       state.rafId = requestAnimationFrame(loop);
     }
@@ -3064,6 +3204,8 @@
       closeSettings(); // never stack game-over underneath the settings overlay
       setScreen("over");
       focusFirst(els.over);
+      if (els.touchInput) els.touchInput.blur(); // drop the soft keyboard
+      announce("Game over — score " + state.score.toLocaleString());
     }
 
     function pauseGame() {
@@ -3081,10 +3223,42 @@
       }
       setScreen("pause");
       focusFirst(els.pause);
+      if (els.touchInput) els.touchInput.blur(); // soft keyboard off the pause dialog
     }
 
     function resumeGame() {
+      // A countdown held via Esc/tab-hide: restart the 3-2-1 instead.
+      if (state.status === "countdown" && state.countdownHeld) {
+        state.countdownHeld = false;
+        setScreen("none");
+        focusTouchInput();
+        startCountdown();
+        return;
+      }
       if (state.status !== "paused") return;
+      // Short READY-GO before motion restarts — words frozen in the peril zone
+      // would otherwise strike before the player's hands are back on the keys.
+      state.status = "resuming";
+      setScreen("none");
+      focusTouchInput();
+      startCountdown(true);
+    }
+
+    // Back out of an in-flight resume countdown (Esc or tab-hide) to the pause
+    // screen; pauseStartMs is untouched so the eventual resume shift stays correct.
+    function holdResume() {
+      if (state.status !== "resuming") return;
+      cancelCountdown();
+      state.status = "paused";
+      if (state.audio && state.audio.ctx.state === "running") {
+        state.audio.ctx.suspend();
+      }
+      setScreen("pause");
+      focusFirst(els.pause);
+    }
+
+    function completeResume() {
+      if (state.status !== "resuming") return;
       state.status = "playing";
       // Shift time-based timers forward by the paused duration so fever / slow-mo /
       // WPM aren't penalised for the break.
@@ -3096,6 +3270,7 @@
       state.slowUntil += pausedSec;
       state.nextStrikeAt += pausedSec;
       state.lastPowerMs += pausedMs;
+      state.lastKeyMs = 0; // a fresh burst — paused wall-clock must not count as active typing
       state.lastFrame = performance.now();
       startBeatLoop(false);
       // A pause during the initial track load abandons the in-flight startMusic
@@ -3141,7 +3316,6 @@
       }
       const el = document.createElement("div");
       el.className = "word" + (powerType ? " power power-" + powerType : "");
-      el.setAttribute("aria-label", (powerType ? "power up " : "") + text);
       const word = {
         id: state.nextWordId,
         text,
@@ -3379,6 +3553,8 @@
       updateFeverMeter();
       if (state.lives <= 0) {
         endGame();
+      } else {
+        announce("Life lost — " + state.lives + " left");
       }
     }
 
@@ -3404,15 +3580,29 @@
 
       const key = event.key;
 
+      // Focus trap: while any dialog is open, Tab never leaves it.
+      if (key === "Tab") {
+        const modal = openModalEl();
+        if (modal) {
+          trapTab(event, modal);
+          return;
+        }
+      }
+
       if (settingsOpen()) {
         if (key === "Escape" || key === "Enter") { event.preventDefault(); closeSettings(); }
         return;
       }
 
       if (key === "Escape") {
-        if (state.status === "countdown") backToStart();
+        if (state.status === "countdown") {
+          // First Esc holds the countdown on the pause dialog; resume restarts it.
+          if (state.countdownHeld) resumeGame();
+          else holdCountdown(true);
+        }
         else if (state.status === "playing") pauseGame();
         else if (state.status === "paused") resumeGame();
+        else if (state.status === "resuming") holdResume();
         return;
       }
 
@@ -3434,9 +3624,15 @@
         else if (key.toLowerCase() === "m") backToStart();
         return;
       }
+      // Countdown held on the pause dialog: mirror the pause-screen keys.
+      if (state.status === "countdown" && state.countdownHeld) {
+        if (key === "Enter") { event.preventDefault(); resumeGame(); }
+        else if (key.toLowerCase() === "m") backToStart();
+        return;
+      }
 
       if (state.status !== "playing") {
-        return; // ignore typing during the countdown
+        return; // ignore typing during the countdown / resume count
       }
 
       if (key === "Backspace") {
@@ -3491,7 +3687,9 @@
 
     function backToStart() {
       cancelCountdown();
+      state.countdownHeld = false;
       state.status = "start";
+      if (els.touchInput) els.touchInput.blur();
       stopBeatLoop();
       if (state.audio && state.audio.ctx.state === "suspended") {
         state.audio.ctx.resume();
@@ -3513,7 +3711,10 @@
 
     function focusFirst(screenEl) {
       if (!screenEl) return;
-      const target = screenEl.querySelector("button:not([disabled]), [tabindex]");
+      // Prefer tab-reachable controls so roving-tabindex radios land on the
+      // selected option, not the first sibling.
+      const target = screenEl.querySelector("button:not([disabled]):not([tabindex='-1']), [tabindex='0']")
+        || screenEl.querySelector("button:not([disabled]), [tabindex]");
       if (target) {
         try { target.focus(); } catch (error) {}
       }
@@ -3523,10 +3724,12 @@
       state.totalPresses += 1;
       let target = state.words.find((word) => word.id === state.targetId);
 
-      // Active-typing time: count gaps under 2s so idle waiting doesn't deflate WPM.
+      // Active-typing time: cap each inter-key gap at 600ms so idle waiting
+      // doesn't deflate WPM, while burst-opening keystrokes still cost a little
+      // (a totally free first keystroke per burst inflated short-word WPM ~25%).
       const nowMs = performance.now();
-      if (state.lastKeyMs && nowMs - state.lastKeyMs < 2000) {
-        state.activeMs += nowMs - state.lastKeyMs;
+      if (state.lastKeyMs) {
+        state.activeMs += Math.min(nowMs - state.lastKeyMs, 600);
       }
       state.lastKeyMs = nowMs;
 
@@ -3768,6 +3971,7 @@
         chip.dataset.song = song.id;
         chip.setAttribute("role", "radio");
         chip.setAttribute("aria-checked", song.id === state.trackKey ? "true" : "false");
+        chip.tabIndex = song.id === state.trackKey ? 0 : -1; // roving tabindex: one tab stop
         chip.style.setProperty("--song-accent", song.accent);
         chip.innerHTML =
           "<span class=\"song-eq\" aria-hidden=\"true\"><i></i><i></i><i></i></span>" +
@@ -3786,6 +3990,7 @@
           const on = c.dataset.song === id;
           c.classList.toggle("selected", on);
           c.setAttribute("aria-checked", on ? "true" : "false");
+          c.tabIndex = on ? 0 : -1;
         });
       }
     }
@@ -3855,17 +4060,30 @@
     }
     function openSettings() {
       if (!els.settingsScreen) return;
+      state.settingsOpener = document.activeElement;
       // Never let settings sit over live gameplay — words would keep falling and
       // strikes accumulate behind the overlay. Pause first; closing the overlay
       // then reveals the pause screen so the player resumes deliberately.
       if (state.status === "playing") pauseGame();
-      else if (state.status === "countdown") backToStart();
+      else if (state.status === "countdown" && !state.countdownHeld) holdCountdown(true);
+      else if (state.status === "resuming") holdResume();
       syncSettingsUI();
       els.settingsScreen.classList.remove("hidden");
+      updateModalGuards();
       focusFirst(els.settingsScreen);
     }
     function closeSettings() {
-      if (els.settingsScreen) els.settingsScreen.classList.add("hidden");
+      if (!els.settingsScreen || els.settingsScreen.classList.contains("hidden")) return;
+      els.settingsScreen.classList.add("hidden");
+      updateModalGuards();
+      // Return keyboard focus to whatever opened the dialog (gear / pause button).
+      const opener = state.settingsOpener;
+      state.settingsOpener = null;
+      if (opener && document.contains(opener) && !opener.closest(".hidden")) {
+        try { opener.focus(); } catch (error) {}
+      } else {
+        focusFirst(openModalEl());
+      }
     }
     function syncSettingsUI() {
       if (els.musicVol) els.musicVol.value = Math.round(state.settings.musicVol * 100);
@@ -3906,6 +4124,33 @@
       renderModeBests();
     }
 
+    // Difficulty radios: aria-checked + roving tabindex + .selected follow the
+    // remembered mode (Enter starts it; arrow keys move it; 1/2/3 start instantly).
+    function updateDifficultySelection() {
+      document.querySelectorAll(".difficulty-button").forEach((button) => {
+        const on = button.dataset.mode === state.modeKey;
+        button.classList.toggle("selected", on);
+        button.setAttribute("aria-checked", on ? "true" : "false");
+        button.tabIndex = on ? 0 : -1;
+      });
+    }
+
+    // Standard radio-group keyboard pattern: arrows move selection and focus together.
+    function wireRadioArrows(container, selector, onMove) {
+      if (!container) return;
+      container.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+        const items = Array.from(container.querySelectorAll(selector));
+        const current = items.indexOf(document.activeElement);
+        if (current === -1 || items.length < 2) return;
+        event.preventDefault();
+        const dir = (event.key === "ArrowRight" || event.key === "ArrowDown") ? 1 : -1;
+        const next = items[(current + dir + items.length) % items.length];
+        onMove(next);
+        try { next.focus(); } catch (error) {}
+      });
+    }
+
     // Per-mode bests on the difficulty buttons — score chasing works on every mode.
     function renderModeBests() {
       document.querySelectorAll(".difficulty-button").forEach((button) => {
@@ -3916,7 +4161,7 @@
       });
     }
 
-    // ---- Touch / no-keyboard graceful message ----
+    // ---- Touch mode: soft-keyboard input + on-screen pause ----
     function detectInput() {
       const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
       const noHover = window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -3924,6 +4169,40 @@
         if (els.mobileBanner) els.mobileBanner.hidden = false;
         els.shell.classList.add("touch");
       }
+    }
+
+    // Focusing the hidden input summons the soft keyboard. Call inside tap
+    // gestures (start/resume) — mobile browsers refuse keyboard pops otherwise.
+    function focusTouchInput() {
+      if (!els.touchInput || !els.shell.classList.contains("touch")) return;
+      els.touchInput.value = "";
+      try { els.touchInput.focus({ preventScroll: true }); } catch (error) {}
+    }
+
+    function wireTouchInput() {
+      if (els.touchInput) {
+        // Soft keyboards often send keydown 229/"Unidentified" — letters arrive
+        // here instead. Hardware keydowns preventDefault before insertion, so
+        // a letter is never processed twice.
+        els.touchInput.addEventListener("input", (event) => {
+          const data = (event && event.data) || els.touchInput.value;
+          els.touchInput.value = "";
+          if (state.status !== "playing" || !data) return;
+          for (const ch of String(data)) {
+            if (/^[a-z]$/i.test(ch)) typeLetter(ch.toLowerCase());
+          }
+        });
+      }
+      if (els.touchPause) {
+        els.touchPause.addEventListener("click", () => {
+          pauseGame();
+          els.touchPause.blur();
+        });
+      }
+      // Tapping the playfield mid-run re-summons a dismissed soft keyboard.
+      els.playfield.addEventListener("pointerdown", () => {
+        if (state.status === "playing") focusTouchInput();
+      });
     }
 
     // ---- Share results ----
@@ -3947,6 +4226,20 @@
       window.setTimeout(() => els.toast.classList.remove("show"), 1800);
     }
 
+    // Screen-reader announcements for discrete gameplay events (the playfield
+    // itself is aria-hidden — falling words would just be live-region spam).
+    let announceTimer = null;
+    function announce(msg) {
+      if (!els.srAnnounce) return;
+      // Clear first so a repeated identical message still re-announces.
+      els.srAnnounce.textContent = "";
+      if (announceTimer) window.clearTimeout(announceTimer);
+      announceTimer = window.setTimeout(() => {
+        announceTimer = null;
+        els.srAnnounce.textContent = msg;
+      }, 30);
+    }
+
     function byId(id) { return document.getElementById(id); }
     Object.assign(els, {
       countdown: byId("countdown"),
@@ -3963,7 +4256,10 @@
       streakStat: byId("streakStat"),
       share: byId("shareButton"),
       toast: byId("toast"),
-      mobileBanner: byId("mobileBanner")
+      mobileBanner: byId("mobileBanner"),
+      srAnnounce: byId("srAnnounce"),
+      touchInput: byId("touchInput"),
+      touchPause: byId("touchPauseButton")
     });
 
     document.querySelectorAll("[data-mode]").forEach((button) => {
@@ -4016,7 +4312,11 @@
           state.resumePreview = !!state.musicSource && state.musicRole === "preview";
           if (state.resumePreview) stopMusic(0.2);
         } else if (state.status === "countdown") {
-          backToStart();
+          // Hold the countdown instead of discarding the chosen run.
+          if (!state.countdownHeld) holdCountdown(false);
+          if (state.musicSource && state.musicRole === "preview") stopMusic(0.2);
+        } else if (state.status === "resuming") {
+          holdResume();
         } else {
           pauseGame();
         }
@@ -4025,6 +4325,11 @@
       if (state.status === "start" && state.resumePreview) {
         state.resumePreview = false;
         previewSong(state.trackKey);
+      } else if (state.status === "countdown" && state.countdownHeld && els.pause.classList.contains("hidden")) {
+        // Held by the tab-hide above (not parked on the pause dialog by Esc):
+        // restart the 3-2-1 so the run survives a brief alt-tab.
+        state.countdownHeld = false;
+        startCountdown();
       }
     });
 
@@ -4037,11 +4342,19 @@
 
     buildSongPicker();
     wireSettings();
+    wireTouchInput();
     renderStartProfile();
     detectInput();
     applySettings();
     updateMuteButton();
     updateHud();
+    updateDifficultySelection();
+    wireRadioArrows(document.querySelector(".difficulty-grid"), ".difficulty-button", (button) => {
+      state.modeKey = button.dataset.mode;
+      updateDifficultySelection();
+    });
+    wireRadioArrows(els.songPicker, ".song-chip", (chip) => selectSong(chip.dataset.song));
+    updateModalGuards();
     focusFirst(els.start);
   </script>
 </body>
