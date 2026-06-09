@@ -2654,6 +2654,7 @@
         els.streakStat.textContent = "🔥 " + (state.profile.streak || 1) + " day streak";
       }
       updateHud();
+      closeSettings(); // never stack game-over underneath the settings overlay
       setScreen("over");
       focusFirst(els.over);
     }
@@ -2672,6 +2673,7 @@
         state.rafId = null;
       }
       setScreen("pause");
+      focusFirst(els.pause);
     }
 
     function resumeGame() {
@@ -2890,6 +2892,14 @@
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // Ignore IME composition keydowns (they can carry raw a-z with isComposing=true).
+      if (event.isComposing || event.keyCode === 229) {
+        return;
+      }
+      // Held keys must not machine-gun mistypes, SFX, or pause toggling.
+      if (event.repeat) {
+        return;
+      }
 
       const key = event.key;
 
@@ -2907,11 +2917,10 @@
 
       // Menu / results navigation by keyboard.
       if (state.status === "start") {
-        if (settingsOpen()) return;
         if (key === "1") startGame("beginner");
         else if (key === "2") startGame("intermediate");
         else if (key === "3") startGame("advanced");
-        else if (key === "Enter") startGame(state.modeKey);
+        else if (key === "Enter") { event.preventDefault(); startGame(state.modeKey); }
         return;
       }
       if (state.status === "gameover") {
@@ -2920,7 +2929,7 @@
         return;
       }
       if (state.status === "paused") {
-        if (key === "Enter") resumeGame();
+        if (key === "Enter") { event.preventDefault(); resumeGame(); }
         else if (key.toLowerCase() === "m") backToStart();
         return;
       }
@@ -2931,7 +2940,24 @@
 
       if (key === "Backspace") {
         event.preventDefault();
-        clearTarget();
+        // Step back one letter instead of wiping the word — absorbs the post-typo reflex.
+        const current = state.words.find((word) => word.id === state.targetId);
+        if (current && current.progress > 0) {
+          current.progress -= 1;
+          renderWord(current);
+        }
+        return;
+      }
+
+      if (key === "Tab") {
+        event.preventDefault();
+        releaseTarget();
+        return;
+      }
+
+      // Habitual Space/Enter must never re-activate a focused HUD button mid-run.
+      if (key === " " || key === "Enter") {
+        event.preventDefault();
         return;
       }
 
@@ -3050,13 +3076,12 @@
       el.classList.add(cls);
     }
 
-    function clearTarget() {
+    function releaseTarget() {
+      // Release the lock but keep typed progress — pickTargetForLetter re-locks the
+      // highest-progress match on the next keystroke, so nothing is lost.
       const current = state.words.find((word) => word.id === state.targetId);
-      if (current) {
-        current.progress = 0;
-        state.targetId = null;
-        renderWord(current);
-      }
+      state.targetId = null;
+      if (current) renderWord(current);
     }
 
     function pulseWrong(word) {
@@ -3283,6 +3308,11 @@
     }
     function openSettings() {
       if (!els.settingsScreen) return;
+      // Never let settings sit over live gameplay — words would keep falling and
+      // strikes accumulate behind the overlay. Pause first; closing the overlay
+      // then reveals the pause screen so the player resumes deliberately.
+      if (state.status === "playing") pauseGame();
+      else if (state.status === "countdown") backToStart();
       syncSettingsUI();
       els.settingsScreen.classList.remove("hidden");
       focusFirst(els.settingsScreen);
@@ -3309,7 +3339,10 @@
         state.settings.reducedMotion = els.reducedToggle.checked;
         saveSettings(); applySettings();
       });
-      if (els.settingsButton) els.settingsButton.addEventListener("click", openSettings);
+      if (els.settingsButton) els.settingsButton.addEventListener("click", () => {
+        openSettings();
+        els.settingsButton.blur(); // keep keyboard focus out of the HUD during play
+      });
       if (els.settingsClose) els.settingsClose.addEventListener("click", closeSettings);
       if (els.pauseSettings) els.pauseSettings.addEventListener("click", openSettings);
     }
@@ -3382,7 +3415,8 @@
     els.mode.addEventListener("click", backToStart);
     els.resume.addEventListener("click", resumeGame);
     els.pauseMode.addEventListener("click", backToStart);
-    els.mute.addEventListener("click", toggleMute);
+    // Blur after click so Space/Enter during play can't re-activate the button.
+    els.mute.addEventListener("click", () => { toggleMute(); els.mute.blur(); });
     if (els.share) els.share.addEventListener("click", shareResults);
     window.addEventListener("keydown", handleKeydown);
     // Auto-pause when the tab is hidden (correct API; won't fire on in-page focus moves).
