@@ -203,7 +203,8 @@
       position: absolute;
       top: 16px;
       left: 16px;
-      right: 124px;
+      /* Clear of .top-controls: 16px edge + two 52px buttons + 10px gap + 10px breathing room */
+      right: 140px;
       z-index: 6;
       display: grid;
       grid-template-columns: repeat(4, minmax(86px, 1fr));
@@ -317,6 +318,22 @@
       opacity: 0.5;
     }
 
+    /* White flash on the pip that just died; spring pop on a regained pip */
+    .life-pip.flash { animation: pipLost 460ms var(--ease); }
+    .life-pip.gained { animation: pipGain 360ms var(--spring); }
+
+    @keyframes pipLost {
+      0% { transform: scale(1); background: #fff; box-shadow: 0 0 18px #fff; opacity: 1; }
+      35% { transform: scale(1.5); background: #fff; box-shadow: 0 0 22px var(--c-danger); opacity: 1; }
+      100% { transform: scale(0.74); opacity: 0.5; }
+    }
+
+    @keyframes pipGain {
+      0% { transform: scale(0.4); }
+      55% { transform: scale(1.3); box-shadow: 0 0 20px var(--c-magenta); }
+      100% { transform: scale(1); }
+    }
+
     .mute-button {
       width: 52px;
       height: 52px;
@@ -407,6 +424,12 @@
       box-shadow: 0 0 34px color-mix(in srgb, var(--c-danger) 85%, transparent);
     }
 
+    /* Brightens while any word is in the peril band (class toggled by JS on state change) */
+    .game-shell.line-hot .danger-line {
+      opacity: 1;
+      box-shadow: 0 0 30px color-mix(in srgb, var(--c-danger) 75%, transparent);
+    }
+
     @keyframes dangerSweep {
       0% { left: -25%; }
       100% { left: 100%; }
@@ -467,11 +490,31 @@
         0 14px 36px rgba(0, 0, 0, 0.46);
     }
 
+    /* The locked target keeps its accent identity in the near band — must sit
+       BEFORE .word.near.peril so the red peril stage still outranks it. */
+    .word.active.near .word-inner {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--c-amber));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 0 22px color-mix(in srgb, var(--c-amber) 45%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.46);
+    }
+
     .word.near.peril .word-inner {
       border-color: color-mix(in srgb, var(--c-danger) 88%, transparent);
       box-shadow:
         0 0 26px color-mix(in srgb, var(--c-danger) 55%, transparent),
         0 14px 36px rgba(0, 0, 0, 0.5);
+      animation: perilPulse 0.45s ease-in-out infinite;
+    }
+
+    @keyframes perilPulse {
+      50% {
+        border-color: #fff;
+        box-shadow:
+          0 0 38px color-mix(in srgb, var(--c-danger) 80%, transparent),
+          0 14px 36px rgba(0, 0, 0, 0.5);
+      }
     }
 
     .word.bump .word-inner {
@@ -494,12 +537,20 @@
     .word .next {
       color: #05101c;
       background: var(--accent);
-      border-radius: 4px;
-      box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 64%, transparent);
+      border-radius: 3px;
+      /* The 2.5px ring widens the chip without padding — real padding would
+         shift glyph layout on every keystroke as the chip walks the word. */
+      box-shadow:
+        0 0 0 2.5px var(--accent),
+        0 0 16px color-mix(in srgb, var(--accent) 64%, transparent);
     }
 
     .word .rest {
-      color: rgba(244, 247, 255, 0.6);
+      color: rgba(244, 247, 255, 0.78);
+    }
+
+    .word.active .rest {
+      color: rgba(244, 247, 255, 0.85);
     }
 
     .particle {
@@ -878,15 +929,15 @@
       color: color-mix(in srgb, var(--accent) 70%, var(--muted));
     }
 
-    /* ---- Fever meter: thin top-edge bar ---- */
+    /* ---- Fever meter: top-edge bar ---- */
     .fever-meter {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      height: 4px;
+      height: 9px;
       z-index: 7;
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.07);
       pointer-events: none;
     }
 
@@ -902,15 +953,58 @@
       box-shadow: 0 0 14px color-mix(in srgb, var(--c-magenta) 60%, transparent);
     }
 
+    /* Label fades in as the meter charges past ~70%, switches to x2 while active */
+    .fever-meter::after {
+      content: "FEVER";
+      position: absolute;
+      top: 13px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.3em;
+      color: var(--c-magenta);
+      text-shadow: 0 0 12px color-mix(in srgb, var(--c-magenta) 60%, transparent);
+      opacity: 0;
+      transition: opacity 200ms var(--ease);
+    }
+
+    .fever-meter.hot::after { opacity: 0.85; }
+
+    .fever-meter.hot > i {
+      box-shadow:
+        0 0 18px var(--c-magenta),
+        0 0 34px color-mix(in srgb, var(--c-magenta) 45%, transparent);
+    }
+
+    .fever-meter.full {
+      box-shadow: 0 0 18px color-mix(in srgb, var(--c-magenta) 55%, transparent);
+    }
+
+    .fever-meter.full::after {
+      content: "FEVER x2";
+      opacity: 1;
+      animation: feverLabelPulse 0.7s ease-in-out infinite;
+    }
+
     .fever-meter.full > i {
       background: linear-gradient(90deg, var(--c-amber), var(--c-magenta), var(--c-amber));
       background-size: 200% 100%;
+      box-shadow: 0 0 20px var(--c-magenta);
       animation: feverSlide 0.7s linear infinite;
     }
 
     @keyframes feverSlide {
       0% { background-position: 0 0; }
       100% { background-position: 200% 0; }
+    }
+
+    @keyframes feverLabelPulse {
+      50% {
+        text-shadow: 0 0 22px var(--c-magenta);
+        transform: translateX(-50%) scale(1.08);
+      }
     }
 
     /* ---- Fever screen state ---- */
@@ -921,6 +1015,10 @@
 
     .game-shell.fever::after { opacity: calc(0.4 + var(--beat-glow) * 0.3); }
     .game-shell.fever .danger-line { opacity: 1; }
+    /* Static inset edge glow — one paint when fever toggles, nothing per-frame */
+    .game-shell.fever .playfield {
+      box-shadow: inset 0 0 90px color-mix(in srgb, var(--c-magenta) 18%, transparent);
+    }
 
     .game-shell.fever .playfield::after {
       content: "";
@@ -985,6 +1083,22 @@
       box-shadow: 0 0 24px color-mix(in srgb, var(--c-magenta) 45%, transparent), 0 12px 30px rgba(0, 0, 0, 0.42);
     }
 
+    /* Proximity always outranks power-up decoration (the power rules above tie
+       with .word.near on specificity and would otherwise win on source order). */
+    .word.power.near .word-inner {
+      border-color: color-mix(in srgb, var(--c-amber) 80%, transparent);
+      box-shadow:
+        0 0 22px color-mix(in srgb, var(--c-amber) 45%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.46);
+    }
+
+    .word.power.near.peril .word-inner {
+      border-color: color-mix(in srgb, var(--c-danger) 88%, transparent);
+      box-shadow:
+        0 0 26px color-mix(in srgb, var(--c-danger) 55%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.5);
+    }
+
     @keyframes keyBump {
       0% { transform: scale(1); }
       40% { transform: scale(1.12); }
@@ -1040,17 +1154,18 @@
       }
     }
 
+    /* translateX(-50%) baked in: callers pass the true center x */
     @keyframes scoreFloat {
       0% {
         opacity: 0;
-        transform: translateY(8px) scale(0.9);
+        transform: translate(-50%, 8px) scale(0.9);
       }
       18% {
         opacity: 1;
       }
       100% {
         opacity: 0;
-        transform: translateY(-34px) scale(1.08);
+        transform: translate(-50%, -34px) scale(1.08);
       }
     }
 
@@ -1248,13 +1363,30 @@
     .game-shell.reduced::after,
     .game-shell.reduced .danger-line::after,
     .game-shell.reduced .fever-meter.full > i,
+    .game-shell.reduced .fever-meter.full::after,
+    .game-shell.reduced .word.near.peril .word-inner,
     .game-shell.reduced .song-chip .song-eq i { animation: none !important; }
+
+    /* Reduced motion must not delete information: the countdown digits and
+       floating feedback labels (PERFECT!, +points, MISS, FEVER!, LEVEL N)
+       render as static opacity swaps; JS timeouts handle removal. */
+    .game-shell.reduced .countdown.show {
+      animation: none !important;
+      opacity: 1;
+    }
+
+    .game-shell.reduced .floating-score {
+      animation: none !important;
+      opacity: 1;
+      transform: translate(-50%, -10px);
+    }
 
     @media (max-width: 720px) {
       .hud {
         top: 10px;
         left: 10px;
-        right: 96px;
+        /* 10px edge + two 42px buttons + 6px gap + 6px breathing room */
+        right: 106px;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 6px;
       }
@@ -1353,6 +1485,20 @@
       }
     }
 
+    /* Short viewports (laptop + taskbar + devtools): compact the vertical chrome.
+       JS stays in sync automatically — it re-reads --line-bottom on resize. */
+    @media (max-height: 640px) {
+      .game-shell { --line-bottom: 54px; }
+
+      .hud { top: 10px; }
+
+      .hud-card { padding: 6px 10px 7px; }
+
+      .hud-value { font-size: 18px; }
+
+      .playfield { inset: 86px 0 0; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -1377,6 +1523,19 @@
       .game-shell::before,
       .danger-line::after {
         animation: none;
+      }
+
+      /* Belt-and-braces: applySettings mirrors this preference into .reduced,
+         but keep the information-bearing elements visible even before it runs. */
+      .countdown.show {
+        animation: none !important;
+        opacity: 1;
+      }
+
+      .floating-score {
+        animation: none !important;
+        opacity: 1;
+        transform: translate(-50%, -10px);
       }
     }
   </style>
@@ -1768,6 +1927,7 @@
       feverActive: false,
       feverUntil: 0,
       feverDuration: FEVER_SECONDS,
+      lineHot: false,
       slowUntil: 0,
       correctChars: 0,
       totalPresses: 0,
@@ -2009,7 +2169,14 @@
         pips = els.lives.firstElementChild;
       }
       for (let i = 0; i < pips.children.length; i += 1) {
-        pips.children[i].classList.toggle("lost", i >= lives);
+        const pip = pips.children[i];
+        const lost = i >= lives;
+        if (lost !== pip.classList.contains("lost")) {
+          pip.classList.toggle("lost", lost);
+          // Flash the pip that just died; pop one regained from the ♥ power-up.
+          pip.classList.remove("flash", "gained");
+          restartAnimation(pip, lost ? "flash" : "gained");
+        }
       }
       els.lives.setAttribute("aria-label", lives + " lives");
     }
@@ -2065,7 +2232,7 @@
       els.shell.classList.add("level-pulse");
       window.setTimeout(() => els.shell.classList.remove("level-pulse"), 700);
       const pr = els.playfield.getBoundingClientRect();
-      spawnFloatingLabel(pr.width / 2 - 36, 64, "LEVEL " + state.level, "#c6ff4d");
+      spawnFloatingLabel(pr.width / 2, 64, "LEVEL " + state.level, "#c6ff4d");
       playLevelUp();
     }
 
@@ -2107,7 +2274,7 @@
       els.shell.classList.add("fever");
       setMusicGain(currentMusicLevel(), 0.3);
       const pr = els.playfield.getBoundingClientRect();
-      spawnFloatingLabel(pr.width / 2 - 40, 112, "FEVER!", "#ff4d9a");
+      spawnFloatingLabel(pr.width / 2, 112, "FEVER!", "#ff4d9a");
       playFever();
     }
 
@@ -2131,7 +2298,11 @@
         lastFeverFrac = quantized;
         els.feverFill.style.transform = "scaleX(" + quantized + ")";
       }
-      if (els.feverMeter) els.feverMeter.classList.toggle("full", state.feverActive);
+      if (els.feverMeter) {
+        els.feverMeter.classList.toggle("full", state.feverActive);
+        // "Almost there" glow + label once the charge passes 70%.
+        els.feverMeter.classList.toggle("hot", !state.feverActive && frac >= 0.7);
+      }
     }
 
     // ---- Live stats (WPM / accuracy) ----
@@ -3101,6 +3272,12 @@
       // the field) so fallSeconds means "seconds until the drop line" at any viewport height.
       const fallSpeed = ((playHeight - state.lineBottom + 58) / state.config.fallSeconds) * (slow ? SLOWMO_FACTOR : 1);
 
+      // Escalation bands in TIME, not pixels (~1.8s amber, ~0.7s red), clamped so
+      // beginner doesn't sit half-amber and the advanced cap keeps a visible warning.
+      const nearAt = lineY - Math.min(300, Math.max(90, fallSpeed * 1.8));
+      const perilAt = lineY - Math.min(150, Math.max(40, fallSpeed * 0.7));
+      let anyPeril = false;
+
       for (let i = state.words.length - 1; i >= 0; i -= 1) {
         const word = state.words[i];
         if (!word) {
@@ -3112,8 +3289,9 @@
         // Collision uses the word's BOTTOM edge so it visually touches the line before dying.
         const bottom = word.y + word.height;
         // Only touch the DOM when the proximity state actually changes (avoids per-frame recalc).
-        const near = bottom >= lineY - 150;
-        const peril = bottom >= lineY - 48;
+        const near = bottom >= nearAt;
+        const peril = bottom >= perilAt;
+        if (peril) anyPeril = true;
         if (near !== word._near) { word.el.classList.toggle("near", near); word._near = near; }
         if (peril !== word._peril) { word.el.classList.toggle("peril", peril); word._peril = peril; }
 
@@ -3123,6 +3301,12 @@
             break;
           }
         }
+      }
+
+      // Danger line heats up while anything is in the peril band (write on change only).
+      if (anyPeril !== state.lineHot) {
+        state.lineHot = anyPeril;
+        els.shell.classList.toggle("line-hot", anyPeril);
       }
 
       state.beatGlow = Math.max(0, state.beatGlow - delta * 4.2);
@@ -3171,12 +3355,14 @@
     function registerStrike(x, y) {
       const now = nowSeconds();
       state.combo = 0; // even forgiven misses break the streak
+      // Every miss gets a MISS label — it's the only word-level feedback that
+      // survives reduced motion (burst/flash/shake are all suppressed there).
+      if (typeof x === "number") {
+        spawnFloatingLabel(x, typeof y === "number" ? y : 0, "MISS", "#ff5364");
+      }
       if (now < state.nextStrikeAt) {
         // Graced pileup miss: the life is forgiven, but acknowledge it —
-        // a soft miss tone + red MISS label, no full-screen strobe/shake.
-        if (typeof x === "number") {
-          spawnFloatingLabel(x - 24, typeof y === "number" ? y : 0, "MISS", "#ff5364");
-        }
+        // a soft miss tone, no full-screen strobe/shake.
         playMiss(true);
         updateHud();
         return;
@@ -3286,7 +3472,8 @@
 
     function resetTransientFx() {
       endFever();
-      els.shell.classList.remove("slowmo", "level-pulse", "flash-miss");
+      els.shell.classList.remove("slowmo", "level-pulse", "flash-miss", "line-hot");
+      state.lineHot = false;
       state.fever = 0;
       state.feverActive = false;
       state.feverUntil = 0;
@@ -3521,6 +3708,9 @@
       float.style.top = y + "px";
       els.playfield.appendChild(float);
       float.addEventListener("animationend", () => float.remove(), { once: true });
+      // Reduced mode shows labels statically (animation: none) — animationend
+      // never fires there, so a timeout owns removal. remove() is idempotent.
+      window.setTimeout(() => float.remove(), 900);
     }
 
     function spawnMissBurst(x, y) {
@@ -3557,6 +3747,8 @@
       label.style.color = color;
       els.playfield.appendChild(label);
       label.addEventListener("animationend", () => label.remove(), { once: true });
+      // Reduced-mode labels are static (no animationend) — timeout owns removal.
+      window.setTimeout(() => label.remove(), 900);
     }
 
     function toggleMute() {
