@@ -1699,13 +1699,15 @@
     };
 
     // Selectable music — decoupled from difficulty. Files live in /audio.
+    // bpm is the measured tempo of each loop (onset autocorrelation); the beat
+    // grid follows the playing track so PERFECT windows land on the audible beat.
     const SONGS = [
-      { id: "synthwave",  name: "Synthwave",   file: "audio/synthwave.mp3",  accent: "#34ecff", tag: "retro drive" },
-      { id: "lofi",       name: "Lo-Fi",       file: "audio/lofi.mp3",       accent: "#5fe6c8", tag: "chill focus" },
-      { id: "futurebass", name: "Future Bass", file: "audio/futurebass.mp3", accent: "#7a5cff", tag: "bright + bouncy" },
-      { id: "chiptune",   name: "Chiptune",    file: "audio/chiptune.mp3",   accent: "#c6ff4d", tag: "8-bit arcade" },
-      { id: "phonk",      name: "Phonk",       file: "audio/phonk.mp3",      accent: "#ff4d9a", tag: "drift + cool" },
-      { id: "none",       name: "Beats Only",  file: null,                   accent: "#9ba7c4", tag: "synth pulse" }
+      { id: "synthwave",  name: "Synthwave",   file: "audio/synthwave.mp3",  bpm: 134, accent: "#34ecff", tag: "retro drive" },
+      { id: "lofi",       name: "Lo-Fi",       file: "audio/lofi.mp3",       bpm: 85,  accent: "#5fe6c8", tag: "chill focus" },
+      { id: "futurebass", name: "Future Bass", file: "audio/futurebass.mp3", bpm: 150, accent: "#7a5cff", tag: "bright + bouncy" },
+      { id: "chiptune",   name: "Chiptune",    file: "audio/chiptune.mp3",   bpm: 140, accent: "#c6ff4d", tag: "8-bit arcade" },
+      { id: "phonk",      name: "Phonk",       file: "audio/phonk.mp3",      bpm: 140, accent: "#ff4d9a", tag: "drift + cool" },
+      { id: "none",       name: "Beats Only",  file: null,                   bpm: 0,   accent: "#9ba7c4", tag: "synth pulse" }
     ];
     function songById(id) { return SONGS.find((s) => s.id === id) || SONGS[0]; }
 
@@ -1734,12 +1736,16 @@
       nextStrikeAt: 0,
       muted: readStoredValue(STORAGE_KEYS.muted, "false") === "true",
       audio: null,
-      beatTimer: null,
       wordBag: [],
       recentWords: [],
       musicBuffers: {},
       musicSource: null,
+      musicGain: null,
       musicToken: 0,
+      musicRole: "game",
+      musicStartedAt: 0,
+      previewTimer: null,
+      resumePreview: false,
       baseConfig: DIFFICULTIES.beginner,
       level: 1,
       wordsCleared: 0,
@@ -1847,7 +1853,21 @@
     }
 
     function beatInterval() {
+      // The grid follows the playing track's real tempo; the difficulty bpm
+      // covers "Beats Only", load failures, and the moment before the bed starts.
+      const song = songById(state.trackKey);
+      if (song.bpm && state.musicRole === "game" && isMusicPlaying()) {
+        return 60 / song.bpm;
+      }
       return 60 / state.config.bpm;
+    }
+
+    // Difficulty defines its cadence in seconds (spawnBeats at the mode bpm);
+    // convert to whole grid beats so word pressure stays roughly equivalent no
+    // matter which track tempo drives the grid.
+    function spawnBeatStep() {
+      const seconds = state.config.spawnBeats * (60 / state.config.bpm);
+      return Math.max(1, Math.round(seconds / beatInterval()));
     }
 
     function cleanWord(word) {
@@ -1971,7 +1991,7 @@
       const spawnBeats = Math.max(2, base.spawnBeats - Math.floor(l / 4));
       return {
         label: base.label,
-        bpm: base.bpm, // fixed so the music bed stays in sync
+        bpm: base.bpm, // defines spawn cadence in seconds; the beat grid itself follows the chosen track
         fallSeconds: Math.max(base.fallSeconds * 0.42, base.fallSeconds * Math.pow(0.93, l)),
         spawnBeats,
         // Words grow longer as you climb — leveling up means typing better, not just faster.
@@ -2022,11 +2042,20 @@
     }
 
     function setMusicGain(target, ramp) {
-      if (!state.audio || !state.musicSource || state.muted) return;
+      // No muted guard: mute lives on the master gain, so the music bus must
+      // keep tracking the correct level or fever boosts leak past unmute.
+      if (!state.audio || !state.musicSource) return;
       const now = state.audio.ctx.currentTime;
       state.audio.music.gain.cancelScheduledValues(now);
       state.audio.music.gain.setValueAtTime(Math.max(0.0001, state.audio.music.gain.value), now);
       state.audio.music.gain.linearRampToValueAtTime(target, now + ramp);
+    }
+
+    // Single source of truth for where the music bus should sit right now:
+    // preview attenuation on the start screen, fever boost during overdrive.
+    function currentMusicLevel() {
+      const preview = state.musicRole === "preview" ? 0.55 : 1;
+      return musicLevel() * preview * (state.feverActive ? 1.35 : 1);
     }
 
     function activateFever() {
@@ -2036,7 +2065,7 @@
       state.feverDuration = state.config.feverSeconds || FEVER_SECONDS;
       state.feverUntil = nowSeconds() + state.feverDuration;
       els.shell.classList.add("fever");
-      setMusicGain(musicLevel() * 1.35, 0.3);
+      setMusicGain(currentMusicLevel(), 0.3);
       const pr = els.playfield.getBoundingClientRect();
       spawnFloatingLabel(pr.width / 2 - 40, 112, "FEVER!", "#ff4d9a");
       playFever();
@@ -2047,7 +2076,7 @@
       state.feverActive = false;
       state.fever = 0;
       els.shell.classList.remove("fever");
-      setMusicGain(musicLevel(), 0.6);
+      setMusicGain(currentMusicLevel(), 0.6);
     }
 
     function updateFeverMeter() {
@@ -2212,8 +2241,9 @@
         const now = state.audio.ctx.currentTime;
         state.audio.sfx.gain.setTargetAtTime(SFX_LEVEL * state.settings.sfxVol, now, 0.02);
         if (state.musicSource) {
-          const lvl = state.feverActive ? musicLevel() * 1.35 : musicLevel();
-          state.audio.music.gain.setTargetAtTime(Math.max(0.0001, lvl), now, 0.05);
+          // currentMusicLevel keeps the start-screen preview attenuated and the
+          // fever boost intact when sliders move mid-state.
+          state.audio.music.gain.setTargetAtTime(Math.max(0.0001, currentMusicLevel()), now, 0.05);
         }
       }
     }
@@ -2442,13 +2472,19 @@
       state.musicToken += 1; // cancel any in-flight startMusic
       if (!audio || !state.musicSource) return;
       const source = state.musicSource;
+      const srcGain = state.musicGain;
       state.musicSource = null;
+      state.musicGain = null;
       const fade = typeof fadeSeconds === "number" ? fadeSeconds : 0.25;
       const now = audio.ctx.currentTime;
       try {
-        audio.music.gain.cancelScheduledValues(now);
-        audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
-        audio.music.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+        // Fade on the per-source gain so a new track starting on the shared
+        // bus can't cancel this ramp and hard-cut the old one.
+        if (srcGain) {
+          srcGain.gain.cancelScheduledValues(now);
+          srcGain.gain.setValueAtTime(Math.max(0.0001, srcGain.gain.value), now);
+          srcGain.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+        }
         source.stop(now + fade + 0.02);
       } catch (error) {
         try { source.stop(); } catch (e) {}
@@ -2458,36 +2494,71 @@
     async function startMusic(trackKey) {
       const audio = ensureAudio();
       if (!audio) return;
-      stopMusic(0.1);
+      stopMusic(0.12);
       const song = songById(trackKey);
       if (!song.file) return; // "Beats Only" — rely on the fallback kick
       const token = state.musicToken;
       const buffer = await loadMusicBuffer(trackKey);
       // Bail if the player changed song or left play while we were loading.
-      if (!buffer || token !== state.musicToken || state.status !== "playing" || state.trackKey !== trackKey) {
+      if (token !== state.musicToken || state.status !== "playing" || state.trackKey !== trackKey) {
+        return;
+      }
+      if (!buffer) {
+        toast("Couldn’t load “" + song.name + "” — playing beats only");
         return;
       }
       const source = audio.ctx.createBufferSource();
       source.buffer = buffer;
       source.loop = true;
-      source.connect(audio.music);
+      const srcGain = audio.ctx.createGain();
+      source.connect(srcGain);
+      srcGain.connect(audio.music);
       const now = audio.ctx.currentTime;
-      audio.music.gain.cancelScheduledValues(now);
-      audio.music.gain.setValueAtTime(0.0001, now);
-      audio.music.gain.exponentialRampToValueAtTime(Math.max(0.0001, musicLevel()), now + 0.9);
-      source.start(now);
+      // Per-source fade-in; the bus jumps straight to the in-game level.
+      srcGain.gain.setValueAtTime(0.0001, now);
+      srcGain.gain.exponentialRampToValueAtTime(1, now + 0.9);
+      state.musicRole = "game";
       state.musicSource = source;
+      state.musicGain = srcGain;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+      audio.music.gain.linearRampToValueAtTime(Math.max(0.0001, currentMusicLevel()), now + 0.15);
+      source.start(now);
+      // Phase-align the beat grid to the moment the track actually starts.
+      state.musicStartedAt = now;
+      syncBeatGridToMusic();
     }
 
     function duckMusic() {
       const audio = state.audio;
       if (!audio || !state.musicSource) return;
       const now = audio.ctx.currentTime;
-      const lvl = Math.max(0.0001, musicLevel());
+      const lvl = Math.max(0.0001, currentMusicLevel());
       audio.music.gain.cancelScheduledValues(now);
       audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
       audio.music.gain.linearRampToValueAtTime(lvl * 0.32, now + 0.06);
       audio.music.gain.linearRampToValueAtTime(lvl, now + 0.55);
+    }
+
+    // Anchor the perf-clock beat grid to the music clock so beats land on the
+    // audible track. ctx.currentTime freezes during suspend() in step with the
+    // frozen buffer, so this also restores phase across pause/resume.
+    function syncBeatGridToMusic() {
+      if (!state.audio || !state.musicSource || state.musicRole !== "game") return false;
+      const interval = beatInterval();
+      if (!interval) return false;
+      let elapsed = state.audio.ctx.currentTime - state.musicStartedAt;
+      const duration = state.musicSource.buffer ? state.musicSource.buffer.duration : 0;
+      if (duration > 0 && elapsed >= duration) {
+        // Keep the anchor inside the current loop pass — the file is rarely an
+        // exact beat multiple, so re-anchor at every wrap.
+        state.musicStartedAt += Math.floor(elapsed / duration) * duration;
+        elapsed = state.audio.ctx.currentTime - state.musicStartedAt;
+      }
+      const phase = ((elapsed % interval) + interval) % interval;
+      state.lastBeatAt = nowSeconds() - phase;
+      state.nextBeatAt = state.lastBeatAt + interval;
+      return true;
     }
 
     function startBeatLoop(playOpeningBeat) {
@@ -2502,17 +2573,23 @@
         triggerBeat(true);
       }
       state.nextBeatAt = nowSeconds() + beatInterval();
+      // Resuming mid-track: re-anchor the grid to the music's frozen position.
+      syncBeatGridToMusic();
     }
 
     function stopBeatLoop() {
-      if (state.beatTimer) {
-        clearInterval(state.beatTimer);
-        state.beatTimer = null;
-      }
       state.nextBeatAt = 0;
     }
 
     function processBeats(currentTime) {
+      // Re-anchor once per music-loop wrap so grid phase survives imperfect loop lengths.
+      if (state.musicSource && state.audio && state.musicRole === "game") {
+        const duration = state.musicSource.buffer ? state.musicSource.buffer.duration : 0;
+        if (duration > 0 && state.audio.ctx.currentTime - state.musicStartedAt >= duration) {
+          syncBeatGridToMusic();
+        }
+      }
+
       if (!state.nextBeatAt) {
         state.nextBeatAt = currentTime + beatInterval();
         return;
@@ -2522,17 +2599,19 @@
       while (currentTime >= state.nextBeatAt && triggered < 4) {
         // Catch-up beats keep the counter/audio in sync but never spawn —
         // at most one spawn per frame so words can't stack at identical y.
-        triggerBeat(false, triggered > 0);
+        triggerBeat(false, triggered > 0, state.nextBeatAt);
         state.nextBeatAt += beatInterval();
         triggered += 1;
       }
 
       if (triggered === 4 && currentTime >= state.nextBeatAt) {
-        state.nextBeatAt = currentTime + beatInterval();
+        if (!syncBeatGridToMusic()) {
+          state.nextBeatAt = currentTime + beatInterval();
+        }
       }
     }
 
-    function triggerBeat(forceSpawn, skipSpawn) {
+    function triggerBeat(forceSpawn, skipSpawn, scheduledAt) {
       const audio = ensureAudio();
       const time = audio ? audio.ctx.currentTime : 0;
       const isDownbeat = state.beatCount % 4 === 0;
@@ -2543,13 +2622,16 @@
       }
 
       state.beatGlow = 1;
-      state.lastBeatAt = nowSeconds();
+      // Stamp the grid-scheduled time, not rAF firing time: catch-up beats after
+      // a stall must not grant a free PERFECT window, and on-time beats shouldn't
+      // inherit up-to-a-frame of rAF jitter.
+      state.lastBeatAt = typeof scheduledAt === "number" ? scheduledAt : nowSeconds();
 
       // nextSpawnBeat is not advanced on skipped catch-up beats, so the next
       // real beat spawns immediately and the cadence self-heals.
       if (!skipSpawn && (forceSpawn || state.beatCount >= state.nextSpawnBeat) && state.words.length < state.config.maxWords) {
         spawnWord();
-        state.nextSpawnBeat = state.beatCount + state.config.spawnBeats;
+        state.nextSpawnBeat = state.beatCount + spawnBeatStep();
       }
 
       state.beatCount += 1;
@@ -2783,6 +2865,9 @@
       state.lastPowerMs += pausedMs;
       state.lastFrame = performance.now();
       startBeatLoop(false);
+      // A pause during the initial track load abandons the in-flight startMusic
+      // (it bails when status leaves "playing") — retry here or the run stays silent.
+      if (!state.musicSource) startMusic(state.trackKey);
       setScreen("none");
       if (state.rafId !== null) {
         cancelAnimationFrame(state.rafId);
@@ -2920,8 +3005,11 @@
       state.lastFrame = timestamp;
       // Long stall (tab jank / background throttle): resync the beat grid
       // instead of replaying missed beats (mirrors the triggered===4 resync).
+      // The music kept playing through the stall, so re-anchor to it when possible.
       if (rawDelta > 0.25 && state.nextBeatAt) {
-        state.nextBeatAt = timestamp / 1000 + beatInterval();
+        if (!syncBeatGridToMusic()) {
+          state.nextBeatAt = timestamp / 1000 + beatInterval();
+        }
         state.clampDebt = 0;
       }
       const delta = Math.min(0.05, rawDelta);
@@ -3410,7 +3498,7 @@
       });
     }
 
-    function selectSong(id) {
+    function applySongSelection(id) {
       state.trackKey = id;
       writeStoredValue(STORAGE_KEYS.track, id);
       if (els.songPicker) {
@@ -3420,30 +3508,65 @@
           c.setAttribute("aria-checked", on ? "true" : "false");
         });
       }
-      previewSong(id);
     }
 
-    // Low-volume menu preview of the chosen song.
-    async function previewSong(id) {
+    function selectSong(id) {
+      const previousId = state.trackKey;
+      applySongSelection(id);
+      previewSong(id, previousId);
+    }
+
+    function clearPreviewTimer() {
+      if (state.previewTimer) {
+        window.clearTimeout(state.previewTimer);
+        state.previewTimer = null;
+      }
+    }
+
+    // Low-volume menu preview of the chosen song. Auto-fades after ~12s so a
+    // forgotten start screen doesn't loop forever.
+    async function previewSong(id, revertTo) {
       const audio = ensureAudio();
       if (!audio) return;
       if (audio.ctx.state === "suspended") audio.ctx.resume();
+      clearPreviewTimer();
       stopMusic(0.15);
       const song = songById(id);
-      if (!song.file || state.muted) return;
+      if (!song.file) return;
       const token = state.musicToken;
+      // Warm the decode cache even while muted so the run starts with the bed ready.
       const buffer = await loadMusicBuffer(id);
-      if (!buffer || token !== state.musicToken || state.status !== "start" || state.trackKey !== id) return;
+      if (token !== state.musicToken || state.trackKey !== id) return;
+      if (!buffer) {
+        toast("Couldn’t load “" + song.name + "” — try another track");
+        // Fall back to the previous working pick (no nested revert on failure).
+        if (revertTo && revertTo !== id) {
+          applySongSelection(revertTo);
+          previewSong(revertTo);
+        }
+        return;
+      }
+      if (state.muted || state.status !== "start") return;
       const src = audio.ctx.createBufferSource();
       src.buffer = buffer;
       src.loop = true;
-      src.connect(audio.music);
+      const srcGain = audio.ctx.createGain();
+      src.connect(srcGain);
+      srcGain.connect(audio.music);
       const now = audio.ctx.currentTime;
-      audio.music.gain.cancelScheduledValues(now);
-      audio.music.gain.setValueAtTime(0.0001, now);
-      audio.music.gain.exponentialRampToValueAtTime(Math.max(0.0001, musicLevel() * 0.55), now + 0.3);
-      src.start(now);
+      srcGain.gain.setValueAtTime(0.0001, now);
+      srcGain.gain.exponentialRampToValueAtTime(1, now + 0.3);
+      state.musicRole = "preview";
       state.musicSource = src;
+      state.musicGain = srcGain;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+      audio.music.gain.linearRampToValueAtTime(Math.max(0.0001, currentMusicLevel()), now + 0.15);
+      src.start(now);
+      state.previewTimer = window.setTimeout(() => {
+        state.previewTimer = null;
+        if (state.status === "start" && state.musicRole === "preview") stopMusic(1.2);
+      }, 12000);
     }
 
     // ---- Settings ----
@@ -3606,10 +3729,30 @@
     state.lineBottom = readLineBottom();
     // Auto-pause when the tab is hidden (correct API; won't fire on in-page focus moves).
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) return;
-      if (state.status === "countdown") backToStart();
-      else pauseGame();
+      if (document.hidden) {
+        if (state.status === "start") {
+          // Don't let a song preview loop forever in a hidden tab.
+          state.resumePreview = !!state.musicSource && state.musicRole === "preview";
+          if (state.resumePreview) stopMusic(0.2);
+        } else if (state.status === "countdown") {
+          backToStart();
+        } else {
+          pauseGame();
+        }
+        return;
+      }
+      if (state.status === "start" && state.resumePreview) {
+        state.resumePreview = false;
+        previewSong(state.trackKey);
+      }
     });
+
+    // Warm the selected track's decode cache on the first user gesture (gesture
+    // also legitimizes AudioContext creation) so the bed is ready by "GO" —
+    // even for muted players or first-timers who never touch the song picker.
+    const warmMusicCache = () => { loadMusicBuffer(state.trackKey); };
+    window.addEventListener("pointerdown", warmMusicCache, { once: true });
+    window.addEventListener("keydown", warmMusicCache, { once: true });
 
     buildSongPicker();
     wireSettings();
