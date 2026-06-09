@@ -694,6 +694,17 @@
       line-height: 1.5;
     }
 
+    /* Per-mode personal best — progression feedback for every difficulty */
+    .mode-best {
+      display: block;
+      margin-top: 6px;
+      min-height: 15px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11.5px;
+      letter-spacing: 0.04em;
+      color: color-mix(in srgb, var(--m-accent, var(--c-cyan)) 70%, var(--ink));
+    }
+
     /* Intensity bars — visual learner-progression cue */
     .mode-intensity {
       display: flex;
@@ -1427,18 +1438,21 @@
           <button class="difficulty-button" type="button" data-mode="beginner">
             <span class="mode-name">Beginner</span>
             <span class="mode-details">Warm up &middot; tiny words &middot; calm</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
             <span class="mode-key" aria-hidden="true">1</span>
           </button>
           <button class="difficulty-button" type="button" data-mode="intermediate">
             <span class="mode-name">Intermediate</span>
             <span class="mode-details">In the pocket &middot; core words</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span>
             <span class="mode-key" aria-hidden="true">2</span>
           </button>
           <button class="difficulty-button" type="button" data-mode="advanced">
             <span class="mode-name">Advanced</span>
             <span class="mode-details">Full send &middot; long words &middot; fast</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span>
             <span class="mode-key" aria-hidden="true">3</span>
           </button>
@@ -1561,20 +1575,42 @@
       "plant", "quick", "river", "round", "shine", "small", "sound", "space", "story", "sweet",
       "table", "thing", "today", "water", "window", "world", "another", "because", "between",
       "keyboard", "learning", "morning", "picture", "practice", "reading", "sentence", "teacher",
-      "together"
+      "together",
+      // 6-8 letter depth so mid-mode pools stay wide at high levels
+      "bridge", "camera", "candle", "castle", "cherry", "coffee", "copper", "dragon", "flower",
+      "forest", "guitar", "island", "jungle", "meadow", "orange", "pencil", "planet", "pocket",
+      "rabbit", "rocket", "silver", "summer", "ticket", "tunnel", "valley", "winter", "wizard",
+      "balloon", "blanket", "captain", "crystal", "diamond", "evening", "factory", "harvest",
+      "journey", "lantern", "library", "mystery", "painter", "pattern", "penguin", "rainbow",
+      "thunder", "village", "weather", "whisper",
+      "airplane", "birthday", "calendar", "computer", "daylight", "dinosaur", "elephant",
+      "festival", "lavender", "midnight", "mountain", "notebook", "sandwich", "starfish",
+      "sunshine", "treasure", "umbrella",
+      // 9-12 letter words so the late-game length ramp (maxLength 12) is fulfillable
+      "adventure", "beautiful", "breakfast", "butterfly", "character", "chocolate", "community",
+      "dangerous", "different", "discovery", "education", "excellent", "fireworks", "furniture",
+      "gratitude", "happiness", "important", "invention", "knowledge", "landscape", "narrative",
+      "orchestra", "paragraph", "raspberry", "signature", "telescope", "vegetable", "waterfall",
+      "wonderful", "xylophone", "yesterday",
+      "basketball", "calculator", "dictionary", "friendship", "generation", "lighthouse",
+      "playground", "strawberry", "technology", "television", "watermelon", "wilderness",
+      "celebration", "electricity", "imagination", "inspiration", "temperature",
+      "intelligence", "neighborhood", "refrigerator", "thunderstorm"
     ];
 
     const DIFFICULTIES = {
       beginner: {
         label: "Beginner",
         bpm: 70,
-        fallSeconds: 18,
+        fallSeconds: 13.5, // first word threatens ~11s in — opening minute stays alive, ~17 WPM demand
         spawnBeats: 5,
         minLength: 3,
         maxLength: 4,
-        maxWords: 3,
+        maxWords: 4, // one extra slot so the field never freezes while waiting on a single word
         basePoints: 70,
-        strikeGraceSeconds: 1.25
+        strikeGraceSeconds: 1.25,
+        feverGain: 1 / 8,   // fever in ~8 clean clears (~34s of spawn-capped play)
+        feverSeconds: 14    // covers ~4-5 words at beginner's spawn rate
       },
       intermediate: {
         label: "Intermediate",
@@ -1585,31 +1621,34 @@
         maxLength: 6,
         maxWords: 5,
         basePoints: 105,
-        strikeGraceSeconds: 0.95
+        strikeGraceSeconds: 0.95,
+        feverGain: 1 / 11,
+        feverSeconds: 8     // ~4-5 words per fever
       },
       advanced: {
         label: "Advanced",
         bpm: 132,
-        fallSeconds: 7.8,
-        spawnBeats: 2,
+        fallSeconds: 9,     // softened entry: ramp carries it down, not the starting line
+        spawnBeats: 3,      // 1.36s/word at L1 (~55 WPM entry, vs intermediate's ~31)
         minLength: 5,
         maxLength: 8,
         maxWords: 8,
         basePoints: 130,
-        strikeGraceSeconds: 0.7
+        strikeGraceSeconds: 0.7,
+        feverGain: 1 / 14,
+        feverSeconds: 6     // ~4-6 words per fever at advanced's spawn rate
       }
     };
 
     // ---- Gameplay tuning ----
     const WORDS_PER_LEVEL = 6;      // clears needed to advance a level
     const MAX_LIVES = 5;            // power-ups can lift you above the starting 3
-    const FEVER_GAIN = 1 / 14;      // meter filled per clean clear
-    const FEVER_DRAIN_ON_MISS = 0.34;
-    const FEVER_SECONDS = 6;        // fever duration
+    const FEVER_SECONDS = 6;        // fallback fever duration (per-mode feverSeconds wins)
     const FEVER_MULTIPLIER = 2;     // points multiplier during fever
     const SLOWMO_SECONDS = 5;
     const SLOWMO_FACTOR = 0.45;     // fall-speed scale while slow-mo is active
-    const POWER_MIN_GAP = 6;        // min clears/spawns between power-ups
+    const POWER_MIN_GAP = 4;        // min spawns between power-ups
+    const POWER_MIN_SECONDS = 12;   // wall-clock gate so fast modes don't get 10x the power-ups/min
     const POWER_CHANCE = 0.5;       // roll once the gap has passed
     const BONUS_POINTS = 500;
     const POWERS = {
@@ -1708,6 +1747,7 @@
       fever: 0,
       feverActive: false,
       feverUntil: 0,
+      feverDuration: FEVER_SECONDS,
       slowUntil: 0,
       correctChars: 0,
       totalPresses: 0,
@@ -1716,6 +1756,7 @@
       lastStatMs: 0,
       spawnCount: 0,
       lastPowerSpawn: -99,
+      lastPowerMs: 0,
       pauseStartMs: 0,
       trackKey: readStoredValue(STORAGE_KEYS.track, "synthwave"),
       activeMs: 0,
@@ -1820,9 +1861,17 @@
 
     function resetWordBag() {
       const cfg = state.config;
-      const inRange = (word) => word.length >= cfg.minLength && word.length <= cfg.maxLength;
-      const pool = availableWords().filter(inRange);
-      const builtInFallback = BUILT_IN_WORDS.map(cleanWord).filter(Boolean).filter(inRange);
+      const all = availableWords();
+      // Relax minLength until the pool holds ≥30 candidates so the late-game
+      // bag never collapses into the 10-word anti-repeat buffer.
+      let minLen = cfg.minLength;
+      let pool = all.filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
+      while (minLen > 3 && pool.length < 30) {
+        minLen -= 1;
+        pool = all.filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
+      }
+      const builtInFallback = BUILT_IN_WORDS.map(cleanWord).filter(Boolean)
+        .filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
       state.wordBag = (pool.length ? pool : builtInFallback).slice();
       shuffle(state.wordBag);
     }
@@ -1916,18 +1965,26 @@
     // ---- Difficulty ramp ----
     function deriveConfig(base, level) {
       const l = Math.max(0, level - 1);
-      const spawnFloor = base.spawnBeats <= 2 ? 1 : 2;
+      // Cadence floor is 2 beats for every mode and the step-down lands every 4
+      // levels, not 2 — advanced ramps 1.36s/word (L1, ~55 WPM) to 0.91s (L5+,
+      // ~95-110 effective WPM with longer words) instead of a 158+ WPM wall at L3.
+      const spawnBeats = Math.max(2, base.spawnBeats - Math.floor(l / 4));
       return {
         label: base.label,
         bpm: base.bpm, // fixed so the music bed stays in sync
         fallSeconds: Math.max(base.fallSeconds * 0.42, base.fallSeconds * Math.pow(0.93, l)),
-        spawnBeats: Math.max(spawnFloor, base.spawnBeats - Math.floor(l / 2)),
+        spawnBeats,
         // Words grow longer as you climb — leveling up means typing better, not just faster.
         minLength: Math.min(base.minLength + 2, base.minLength + Math.floor(l / 4)),
         maxLength: Math.min(12, base.maxLength + Math.floor(l / 2)),
         maxWords: Math.min(base.maxWords + 4, base.maxWords + Math.floor(l / 2)),
         basePoints: base.basePoints,
-        strikeGraceSeconds: base.strikeGraceSeconds
+        // Grace only forgives near-simultaneous pileups: keep it below the spawn
+        // interval at every level (~0.55s on advanced L5+) so flooding never makes
+        // alternate misses permanently free.
+        strikeGraceSeconds: Math.min(base.strikeGraceSeconds, spawnBeats * (60 / base.bpm) * 0.6),
+        feverGain: base.feverGain,
+        feverSeconds: base.feverSeconds
       };
     }
 
@@ -1975,7 +2032,9 @@
     function activateFever() {
       state.feverActive = true;
       state.fever = 1;
-      state.feverUntil = nowSeconds() + FEVER_SECONDS;
+      // Per-mode duration so fever covers ~4-6 words on every difficulty.
+      state.feverDuration = state.config.feverSeconds || FEVER_SECONDS;
+      state.feverUntil = nowSeconds() + state.feverDuration;
       els.shell.classList.add("fever");
       setMusicGain(musicLevel() * 1.35, 0.3);
       const pr = els.playfield.getBoundingClientRect();
@@ -1994,7 +2053,7 @@
     function updateFeverMeter() {
       let frac = state.fever;
       if (state.feverActive) {
-        frac = Math.max(0, (state.feverUntil - nowSeconds()) / FEVER_SECONDS);
+        frac = Math.max(0, (state.feverUntil - nowSeconds()) / (state.feverDuration || FEVER_SECONDS));
       }
       if (els.feverFill) els.feverFill.style.width = (frac * 100).toFixed(1) + "%";
       if (els.feverMeter) els.feverMeter.classList.toggle("full", state.feverActive);
@@ -2015,14 +2074,16 @@
       rec[field] += 1;
     }
 
-    // Did this clear land within ±110ms of a beat?
+    // Did this clear land on the beat? Window scales with tempo (±18% of the
+    // interval, clamped 70-140ms) so PERFECT feels equally strict on every mode.
     function isOnBeat() {
       const interval = beatInterval();
       if (!interval || !state.lastBeatAt) return false;
       const since = nowSeconds() - state.lastBeatAt;
       const phase = ((since % interval) + interval) % interval;
       const dist = Math.min(phase, interval - phase);
-      return dist <= 0.11;
+      const tol = Math.min(0.14, Math.max(0.07, interval * 0.18));
+      return dist <= tol;
     }
 
     function currentAccuracy() {
@@ -2041,6 +2102,9 @@
     function maybePowerType() {
       if (state.words.some((w) => w.power)) return null;
       if (state.spawnCount - state.lastPowerSpawn < POWER_MIN_GAP) return null;
+      // Elapsed-time gate: roughly one power per ~12-20s on every mode, instead
+      // of spawn-count-only (which gave advanced ~10x the power-ups per minute).
+      if (performance.now() - state.lastPowerMs < POWER_MIN_SECONDS * 1000) return null;
       if (Math.random() > POWER_CHANCE) return null;
       const pool = ["bonus", "bonus", "slow", "slow", "clear"];
       pool.push(state.lives < state.maxLives ? "life" : "bonus");
@@ -2050,7 +2114,8 @@
     function applyPower(type, x, y) {
       const def = POWERS[type];
       if (type === "bonus") {
-        const pts = BONUS_POINTS * (state.feverActive ? FEVER_MULTIPLIER : 1);
+        // Combo-scaled so the bonus star stays exciting deep into a streak.
+        const pts = Math.round(BONUS_POINTS * comboMultiplier()) * (state.feverActive ? FEVER_MULTIPLIER : 1);
         state.score += pts;
         spawnFloatingLabel(x, y - 30, "+" + pts, def.color);
       } else if (type === "life") {
@@ -2072,8 +2137,12 @@
           swept += 1;
         }
         state.targetId = null;
-        const pts = swept * 40;
+        // Swept words pay half a typed clear each (combo + fever scaled) and
+        // bank half fever credit, so the sweep is an escape hatch, not a score trap.
+        let pts = swept * Math.round(state.config.basePoints * 0.5 * comboMultiplier());
+        if (state.feverActive) pts *= FEVER_MULTIPLIER;
         state.score += pts;
+        addFever(state.config.feverGain * 0.5 * swept);
         spawnFloatingLabel(x, y - 30, def.label + (pts ? " +" + pts : ""), def.color);
       }
       playPower(type);
@@ -2224,7 +2293,8 @@
     }
 
     // Missed word: a soft descending two-step "aww", filtered so it never bites.
-    function playMiss() {
+    // soft=true is the quieter grace-window variant — audible, but no music duck.
+    function playMiss(soft) {
       const audio = ensureAudio();
       if (!audio || state.muted) return;
 
@@ -2238,14 +2308,14 @@
       filter.type = "lowpass";
       filter.frequency.value = 1400;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(soft ? 0.09 : 0.22, t + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(audio.sfx);
       osc.start(t);
       osc.stop(t + 0.36);
-      duckMusic();
+      if (!soft) duckMusic();
     }
 
     // Level up: a quick ascending major arpeggio.
@@ -2531,6 +2601,9 @@
       state.lastStatMs = state.runStartMs;
       state.spawnCount = 0;
       state.lastPowerSpawn = 0;
+      // Stamp now: with the countdown, the first power-up lands ~9-10s into play —
+      // early enough to be an onboarding hook, even on beginner.
+      state.lastPowerMs = performance.now();
       resetTransientFx();
       if (els.level) els.level.textContent = "LVL 1";
       els.playfield.innerHTML = "";
@@ -2638,13 +2711,18 @@
       }
       clearWords();
       updateLiveStats();
-      updateProfileOnRun();
+      const isPB = updateProfileOnRun();
 
       const overModal = els.over.querySelector(".modal");
       if (state.score > state.highScore) {
         state.highScore = state.score;
         writeStoredValue(STORAGE_KEYS.highScore, String(state.highScore));
         els.gameOverCopy.textContent = "New high score! That one landed right on the beat.";
+        if (overModal) overModal.classList.add("new-high");
+      } else if (isPB && state.score > 0) {
+        // Per-mode personal best — celebrate even when the global high (set on a
+        // harder mode) is out of reach.
+        els.gameOverCopy.textContent = "New " + state.config.label + " best! Your top run on this mode.";
         if (overModal) overModal.classList.add("new-high");
       } else {
         els.gameOverCopy.textContent = getRunMessage();
@@ -2702,6 +2780,7 @@
       state.feverUntil += pausedSec;
       state.slowUntil += pausedSec;
       state.nextStrikeAt += pausedSec;
+      state.lastPowerMs += pausedMs;
       state.lastFrame = performance.now();
       startBeatLoop(false);
       setScreen("none");
@@ -2761,6 +2840,7 @@
       };
       if (powerType) {
         state.lastPowerSpawn = state.spawnCount;
+        state.lastPowerMs = performance.now();
       }
       state.nextWordId += 1;
       renderWord(word);
@@ -2910,23 +2990,32 @@
       if (word.id === state.targetId) {
         state.targetId = null;
       }
-      spawnMissBurst(word.x + word.width / 2, word.y + word.height);
+      const cx = word.x + word.width / 2;
+      spawnMissBurst(cx, word.y + word.height);
       word.el.remove();
       state.words.splice(index, 1);
-      registerStrike();
+      registerStrike(cx, word.y);
     }
 
-    function registerStrike() {
+    function registerStrike(x, y) {
       const now = nowSeconds();
+      state.combo = 0; // even forgiven misses break the streak
       if (now < state.nextStrikeAt) {
+        // Graced pileup miss: the life is forgiven, but acknowledge it —
+        // a soft miss tone + red MISS label, no full-screen strobe/shake.
+        if (typeof x === "number") {
+          spawnFloatingLabel(x - 24, typeof y === "number" ? y : 0, "MISS", "#ff5364");
+        }
+        playMiss(true);
+        updateHud();
         return;
       }
 
-      state.combo = 0;
       state.lives -= 1;
       state.shakeTimer = 0.32;
       state.nextStrikeAt = now + state.config.strikeGraceSeconds;
-      drainFever(FEVER_DRAIN_ON_MISS);
+      // A strike always costs ~3 clears of fever progress, whatever the mode.
+      drainFever(3 * state.config.feverGain);
       flashMiss();
       playMiss();
       updateHud();
@@ -3196,7 +3285,7 @@
         if (onBeat) playPerfect();
       }
 
-      addFever(FEVER_GAIN);
+      addFever(state.config.feverGain);
       checkLevelUp();
       updateHud();
       updateLiveStats();
@@ -3411,6 +3500,17 @@
       parts.push((p.lifetimeWords || 0).toLocaleString() + " words typed");
       if (state.highScore > 0) parts.push("best " + state.highScore.toLocaleString());
       els.startProfile.innerHTML = parts.map((t) => "<span class=\"stat-chip\">" + t + "</span>").join("");
+      renderModeBests();
+    }
+
+    // Per-mode bests on the difficulty buttons — score chasing works on every mode.
+    function renderModeBests() {
+      document.querySelectorAll(".difficulty-button").forEach((button) => {
+        const span = button.querySelector(".mode-best");
+        if (!span) return;
+        const best = state.profile.best && state.profile.best[button.dataset.mode];
+        span.textContent = best && best.score > 0 ? "Best " + best.score.toLocaleString() : "";
+      });
     }
 
     // ---- Touch / no-keyboard graceful message ----
