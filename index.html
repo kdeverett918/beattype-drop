@@ -290,6 +290,9 @@
     .hud-value.pop {
       animation: comboPop 360ms var(--spring);
     }
+    /* Identical twin keyframes: toggling the name restarts the pop without
+       the offsetWidth forced-reflow hack. */
+    .hud-value.pop.pop-alt { animation-name: comboPopAlt; }
 
     /* Lives rendered as pips inside #livesValue */
     .lives-pips {
@@ -424,14 +427,15 @@
       padding: 9px 14px 10px;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: var(--r-sm);
+      /* No backdrop-filter here: a moving backdrop-filter element forces a
+         backdrop re-blur every frame per word. The opaque-ish fill keeps
+         legibility over the aurora instead. Static chrome keeps its blur. */
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 42%),
-        rgba(9, 13, 26, 0.74);
+        rgba(9, 13, 26, 0.88);
       box-shadow:
         0 10px 26px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(5px);
-      -webkit-backdrop-filter: blur(5px);
       color: rgba(244, 247, 255, 0.78);
       font-family: "JetBrains Mono", "Courier New", monospace;
       font-size: clamp(18px, 2.7vw, 28px);
@@ -889,10 +893,13 @@
     .fever-meter > i {
       display: block;
       height: 100%;
-      width: 0%;
+      width: 100%;
+      /* scaleX from JS (compositor-only) instead of animating width (layout). */
+      transform: scaleX(0);
+      transform-origin: left center;
+      will-change: transform;
       background: linear-gradient(90deg, var(--c-cyan), var(--c-violet), var(--c-magenta));
       box-shadow: 0 0 14px color-mix(in srgb, var(--c-magenta) 60%, transparent);
-      transition: width 120ms linear;
     }
 
     .fever-meter.full > i {
@@ -993,6 +1000,12 @@
     }
 
     @keyframes comboPop {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.28); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes comboPopAlt {
       0% { transform: scale(1); }
       35% { transform: scale(1.28); }
       100% { transform: scale(1); }
@@ -1725,6 +1738,7 @@
       nextWordId: 1,
       lastFrame: 0,
       rafId: null,
+      playHeight: 0,
       lastBeatAt: 0,
       nextBeatAt: 0,
       clampDebt: 0,
@@ -1800,6 +1814,17 @@
 
     function saveSettings() {
       writeStoredValue(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+    }
+
+    // Slider drags fire dozens of input events per second — apply live but
+    // batch the synchronous localStorage write behind a short debounce.
+    let settingsSaveTimer = null;
+    function scheduleSettingsSave() {
+      if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
+      settingsSaveTimer = window.setTimeout(() => {
+        settingsSaveTimer = null;
+        saveSettings();
+      }, 250);
     }
 
     function loadProfile() {
@@ -1948,15 +1973,20 @@
     }
 
     let hudComboShown = 1;
+    // Per-frame write caches: skip DOM writes when the rendered value is unchanged.
+    let lastGlowStr = null;
+    let lastShakeStr = null;
+    let lastFeverFrac = -1;
 
     function updateHud() {
       els.score.textContent = state.score.toLocaleString();
       const mult = comboMultiplier();
       els.combo.textContent = "x" + mult.toFixed(1);
       if (mult > hudComboShown + 0.0001) {
-        els.combo.classList.remove("pop");
-        void els.combo.offsetWidth;
+        // Alternate between twin keyframe names to restart the animation —
+        // avoids the forced synchronous layout of the offsetWidth hack.
         els.combo.classList.add("pop");
+        els.combo.classList.toggle("pop-alt");
       }
       hudComboShown = mult;
       renderLives();
@@ -1965,12 +1995,22 @@
 
     function renderLives() {
       const lives = Math.max(0, Math.min(state.maxLives, state.lives));
-      let html = "<span class=\"lives-pips\">";
-      for (let i = 0; i < lives; i += 1) {
-        html += "<span class=\"life-pip\"></span>";
+      let pips = els.lives.firstElementChild;
+      // The row holds the highest life count reached this run; updates only
+      // toggle .lost per pip, so lost lives stay visible as dimmed pips and
+      // the .lost transition can play (startGame empties the row per run).
+      if (!pips || pips.childElementCount < lives) {
+        let html = "<span class=\"lives-pips\">";
+        for (let i = 0; i < lives; i += 1) {
+          html += "<span class=\"life-pip\"></span>";
+        }
+        html += "</span>";
+        els.lives.innerHTML = html;
+        pips = els.lives.firstElementChild;
       }
-      html += "</span>";
-      els.lives.innerHTML = html;
+      for (let i = 0; i < pips.children.length; i += 1) {
+        pips.children[i].classList.toggle("lost", i >= lives);
+      }
       els.lives.setAttribute("aria-label", lives + " lives");
     }
 
@@ -2084,7 +2124,13 @@
       if (state.feverActive) {
         frac = Math.max(0, (state.feverUntil - nowSeconds()) / (state.feverDuration || FEVER_SECONDS));
       }
-      if (els.feverFill) els.feverFill.style.width = (frac * 100).toFixed(1) + "%";
+      // scaleX (compositor) instead of width (layout); quantize to 0.1% and
+      // skip the write when unchanged so idle rAF frames cost nothing here.
+      const quantized = Math.round(Math.max(0, Math.min(1, frac)) * 1000) / 1000;
+      if (els.feverFill && quantized !== lastFeverFrac) {
+        lastFeverFrac = quantized;
+        els.feverFill.style.transform = "scaleX(" + quantized + ")";
+      }
       if (els.feverMeter) els.feverMeter.classList.toggle("full", state.feverActive);
     }
 
@@ -2156,11 +2202,14 @@
         spawnFloatingLabel(x, y - 30, def.label, def.color);
       } else if (type === "clear") {
         let swept = 0;
-        const pr = els.playfield.getBoundingClientRect();
+        // Positions come from tracked state (x/y/width/height are already
+        // maintained by the loop) — no getBoundingClientRect per word, so the
+        // sweep never interleaves layout reads with the removals below.
+        // Cap per-word particles on big sweeps to bound the one-frame DOM churn.
+        const perWord = state.words.length > 5 ? 8 : undefined;
         for (let i = state.words.length - 1; i >= 0; i -= 1) {
           const w = state.words[i];
-          const r = w.el.getBoundingClientRect();
-          spawnBurst(r.left - pr.left + r.width / 2, r.top - pr.top + r.height / 2, 40);
+          spawnBurst(w.x + w.width / 2, w.y + w.height / 2, 40, perWord);
           w.el.remove();
           state.words.splice(i, 1);
           swept += 1;
@@ -2452,19 +2501,30 @@
     async function loadMusicBuffer(trackKey) {
       const audio = ensureAudio();
       if (!audio) return null;
-      if (state.musicBuffers[trackKey]) return state.musicBuffers[trackKey];
-      const song = songById(trackKey);
-      if (!song || !song.file) return null;
-      try {
-        const res = await fetch(song.file, { cache: "force-cache" });
-        if (!res.ok) return null;
-        const data = await res.arrayBuffer();
-        const buffer = await audio.ctx.decodeAudioData(data);
-        state.musicBuffers[trackKey] = buffer;
-        return buffer;
-      } catch (error) {
-        return null;
+      if (!state.musicBuffers[trackKey]) {
+        const song = songById(trackKey);
+        if (!song || !song.file) return null;
+        // Cache the in-flight promise (not the decoded buffer) so rapid
+        // song-chip clicks can't fire duplicate fetch + decodeAudioData work.
+        state.musicBuffers[trackKey] = (async () => {
+          try {
+            const res = await fetch(song.file, { cache: "force-cache" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const data = await res.arrayBuffer();
+            return await audio.ctx.decodeAudioData(data);
+          } catch (error) {
+            delete state.musicBuffers[trackKey]; // failed loads stay retryable
+            return null;
+          }
+        })();
+        // Decoded PCM runs ~25 MB per track — keep at most two resident
+        // (the one just requested plus the currently selected track).
+        const stale = Object.keys(state.musicBuffers).filter((key) => key !== trackKey && key !== state.trackKey);
+        while (Object.keys(state.musicBuffers).length > 2 && stale.length) {
+          delete state.musicBuffers[stale.shift()];
+        }
       }
+      return state.musicBuffers[trackKey];
     }
 
     function stopMusic(fadeSeconds) {
@@ -2656,6 +2716,7 @@
       state.combo = 0;
       state.bestCombo = 0;
       state.lives = 3;
+      els.lives.innerHTML = ""; // fresh pip row — drop dimmed pips from the last run
       state.nextWordId = 1;
       state.beatCount = 0;
       state.nextBeatAt = 0;
@@ -2663,6 +2724,7 @@
       state.nextSpawnBeat = 0;
       state.beatGlow = 0;
       state.shakeTimer = 0;
+      state.playHeight = 0; // re-measure on the first frame of the new run
       state.nextStrikeAt = 0;
       state.recentWords = [];
       state.wordsCleared = 0;
@@ -3022,7 +3084,10 @@
         state.clampDebt = 0;
       }
       processBeats(timestamp / 1000);
-      const playHeight = els.playfield.clientHeight;
+      // clientHeight forces layout — read it once and refresh via the debounced
+      // resize handler instead of every frame.
+      if (!state.playHeight) state.playHeight = els.playfield.clientHeight;
+      const playHeight = state.playHeight;
       const lineY = playHeight - state.lineBottom;
       const now = nowSeconds();
       const slow = now < state.slowUntil;
@@ -3062,8 +3127,21 @@
 
       state.beatGlow = Math.max(0, state.beatGlow - delta * 4.2);
       state.shakeTimer = Math.max(0, state.shakeTimer - delta);
-      els.shell.style.setProperty("--beat-glow", state.reducedMotion ? "0.16" : state.beatGlow.toFixed(3));
-      els.shell.style.setProperty("--shake-x", (!state.reducedMotion && state.shakeTimer > 0) ? (Math.sin(timestamp * 0.09) * 4).toFixed(1) + "px" : "0px");
+      // Custom-property writes on the shell trigger a subtree style recalc —
+      // only touch them when the rendered value actually changed (idle/reduced
+      // frames then write nothing at all).
+      const glowStr = state.reducedMotion ? "0.16" : state.beatGlow.toFixed(3);
+      if (glowStr !== lastGlowStr) {
+        lastGlowStr = glowStr;
+        els.shell.style.setProperty("--beat-glow", glowStr);
+      }
+      const shakeStr = (!state.reducedMotion && state.shakeTimer > 0)
+        ? (Math.sin(timestamp * 0.09) * 4).toFixed(1) + "px"
+        : "0px";
+      if (shakeStr !== lastShakeStr) {
+        lastShakeStr = shakeStr;
+        els.shell.style.setProperty("--shake-x", shakeStr);
+      }
 
       updateFeverMeter();
       if (timestamp - state.lastStatMs > 400) {
@@ -3071,7 +3149,12 @@
         updateLiveStats();
       }
 
-      state.rafId = requestAnimationFrame(loop);
+      // missWord can end the run mid-loop — don't schedule a stray extra frame.
+      if (state.status === "playing") {
+        state.rafId = requestAnimationFrame(loop);
+      } else {
+        state.rafId = null;
+      }
     }
 
     function missWord(word, index) {
@@ -3331,10 +3414,10 @@
       const index = state.words.findIndex((item) => item.id === word.id);
       if (index === -1) return;
 
-      const rect = word.el.getBoundingClientRect();
-      const playRect = els.playfield.getBoundingClientRect();
-      const x = rect.left - playRect.left + rect.width / 2;
-      const y = rect.top - playRect.top + rect.height / 2;
+      // Tracked state already holds the word's playfield-relative box — using
+      // it avoids two forced layouts (getBoundingClientRect) per cleared word.
+      const x = word.x + word.width / 2;
+      const y = word.y + word.height / 2;
       const nextCombo = state.combo + 1;
       const multiplier = comboMultiplierFor(nextCombo);
 
@@ -3401,29 +3484,34 @@
       return "Warm-up complete. Try one clean streak next run.";
     }
 
-    function spawnBurst(x, y, points) {
-      const colors = ["#34ecff", "#7a5cff", "#ff4d9a", "#c6ff4d", "#ffb347"];
+    function spawnBurst(x, y, points, particleCount) {
+      // Reduced motion: skip the ring/particles but keep the +points label so
+      // score feedback survives (the label renders as a static fade in reduced mode).
+      if (!state.reducedMotion) {
+        const colors = ["#34ecff", "#7a5cff", "#ff4d9a", "#c6ff4d", "#ffb347"];
 
-      const ring = document.createElement("span");
-      ring.className = "shockwave";
-      ring.style.left = x + "px";
-      ring.style.top = y + "px";
-      ring.style.setProperty("--shock-color", "var(--accent)");
-      els.playfield.appendChild(ring);
-      ring.addEventListener("animationend", () => ring.remove(), { once: true });
+        const ring = document.createElement("span");
+        ring.className = "shockwave";
+        ring.style.left = x + "px";
+        ring.style.top = y + "px";
+        ring.style.setProperty("--shock-color", "var(--accent)");
+        els.playfield.appendChild(ring);
+        ring.addEventListener("animationend", () => ring.remove(), { once: true });
 
-      for (let i = 0; i < 22; i += 1) {
-        const particle = document.createElement("span");
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 24 + Math.random() * 58;
-        particle.className = "particle";
-        particle.style.left = x + "px";
-        particle.style.top = y + "px";
-        particle.style.setProperty("--dx", Math.cos(angle) * distance);
-        particle.style.setProperty("--dy", Math.sin(angle) * distance);
-        particle.style.setProperty("--particle-color", colors[i % colors.length]);
-        els.playfield.appendChild(particle);
-        particle.addEventListener("animationend", () => particle.remove(), { once: true });
+        const count = particleCount || 22;
+        for (let i = 0; i < count; i += 1) {
+          const particle = document.createElement("span");
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 24 + Math.random() * 58;
+          particle.className = "particle";
+          particle.style.left = x + "px";
+          particle.style.top = y + "px";
+          particle.style.setProperty("--dx", Math.cos(angle) * distance);
+          particle.style.setProperty("--dy", Math.sin(angle) * distance);
+          particle.style.setProperty("--particle-color", colors[i % colors.length]);
+          els.playfield.appendChild(particle);
+          particle.addEventListener("animationend", () => particle.remove(), { once: true });
+        }
       }
 
       const float = document.createElement("span");
@@ -3595,11 +3683,11 @@
     function wireSettings() {
       if (els.musicVol) els.musicVol.addEventListener("input", () => {
         state.settings.musicVol = clamp01(els.musicVol.value / 100, 1);
-        saveSettings(); applySettings();
+        scheduleSettingsSave(); applySettings();
       });
       if (els.sfxVol) els.sfxVol.addEventListener("input", () => {
         state.settings.sfxVol = clamp01(els.sfxVol.value / 100, 1);
-        saveSettings(); applySettings();
+        scheduleSettingsSave(); applySettings();
       });
       if (els.sfxVol) els.sfxVol.addEventListener("change", () => playClear(1));
       if (els.reducedToggle) els.reducedToggle.addEventListener("change", () => {
@@ -3708,6 +3796,7 @@
     // re-measure live words and re-clamp them into the new playfield width.
     function handleResize() {
       state.lineBottom = readLineBottom();
+      state.playHeight = els.playfield.clientHeight;
       if (!state.words.length) return;
       const fieldWidth = els.playfield.clientWidth;
       state.words.forEach((word) => {
