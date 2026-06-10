@@ -99,6 +99,8 @@
     }
 
     .game-shell {
+      /* Single source of truth for drop-line geometry — JS reads this via getComputedStyle. */
+      --line-bottom: 70px;
       position: relative;
       width: 100vw;
       height: 100vh;
@@ -201,7 +203,8 @@
       position: absolute;
       top: 16px;
       left: 16px;
-      right: 124px;
+      /* Clear of .top-controls: 16px edge + two 52px buttons + 10px gap + 10px breathing room */
+      right: 140px;
       z-index: 6;
       display: grid;
       grid-template-columns: repeat(4, minmax(86px, 1fr));
@@ -288,6 +291,9 @@
     .hud-value.pop {
       animation: comboPop 360ms var(--spring);
     }
+    /* Identical twin keyframes: toggling the name restarts the pop without
+       the offsetWidth forced-reflow hack. */
+    .hud-value.pop.pop-alt { animation-name: comboPopAlt; }
 
     /* Lives rendered as pips inside #livesValue */
     .lives-pips {
@@ -310,6 +316,22 @@
       box-shadow: none;
       transform: scale(0.74);
       opacity: 0.5;
+    }
+
+    /* White flash on the pip that just died; spring pop on a regained pip */
+    .life-pip.flash { animation: pipLost 460ms var(--ease); }
+    .life-pip.gained { animation: pipGain 360ms var(--spring); }
+
+    @keyframes pipLost {
+      0% { transform: scale(1); background: #fff; box-shadow: 0 0 18px #fff; opacity: 1; }
+      35% { transform: scale(1.5); background: #fff; box-shadow: 0 0 22px var(--c-danger); opacity: 1; }
+      100% { transform: scale(0.74); opacity: 0.5; }
+    }
+
+    @keyframes pipGain {
+      0% { transform: scale(0.4); }
+      55% { transform: scale(1.3); box-shadow: 0 0 20px var(--c-magenta); }
+      100% { transform: scale(1); }
     }
 
     .mute-button {
@@ -348,7 +370,9 @@
 
     .playfield {
       position: absolute;
-      inset: 112px 0 76px;
+      /* Extends to the shell bottom so words can visually reach the danger line
+         (bottom: var(--line-bottom)) before the miss check removes them. */
+      inset: 112px 0 0;
       overflow: hidden;
     }
 
@@ -356,7 +380,7 @@
       position: absolute;
       left: 0;
       right: 0;
-      bottom: 70px;
+      bottom: var(--line-bottom);
       height: 2px;
       z-index: 2;
       background: linear-gradient(90deg,
@@ -400,6 +424,12 @@
       box-shadow: 0 0 34px color-mix(in srgb, var(--c-danger) 85%, transparent);
     }
 
+    /* Brightens while any word is in the peril band (class toggled by JS on state change) */
+    .game-shell.line-hot .danger-line {
+      opacity: 1;
+      box-shadow: 0 0 30px color-mix(in srgb, var(--c-danger) 75%, transparent);
+    }
+
     @keyframes dangerSweep {
       0% { left: -25%; }
       100% { left: 100%; }
@@ -420,14 +450,15 @@
       padding: 9px 14px 10px;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: var(--r-sm);
+      /* No backdrop-filter here: a moving backdrop-filter element forces a
+         backdrop re-blur every frame per word. The opaque-ish fill keeps
+         legibility over the aurora instead. Static chrome keeps its blur. */
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 42%),
-        rgba(9, 13, 26, 0.74);
+        rgba(9, 13, 26, 0.88);
       box-shadow:
         0 10px 26px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(5px);
-      -webkit-backdrop-filter: blur(5px);
       color: rgba(244, 247, 255, 0.78);
       font-family: "JetBrains Mono", "Courier New", monospace;
       font-size: clamp(18px, 2.7vw, 28px);
@@ -459,11 +490,31 @@
         0 14px 36px rgba(0, 0, 0, 0.46);
     }
 
+    /* The locked target keeps its accent identity in the near band — must sit
+       BEFORE .word.near.peril so the red peril stage still outranks it. */
+    .word.active.near .word-inner {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--c-amber));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 0 22px color-mix(in srgb, var(--c-amber) 45%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.46);
+    }
+
     .word.near.peril .word-inner {
       border-color: color-mix(in srgb, var(--c-danger) 88%, transparent);
       box-shadow:
         0 0 26px color-mix(in srgb, var(--c-danger) 55%, transparent),
         0 14px 36px rgba(0, 0, 0, 0.5);
+      animation: perilPulse 0.45s ease-in-out infinite;
+    }
+
+    @keyframes perilPulse {
+      50% {
+        border-color: #fff;
+        box-shadow:
+          0 0 38px color-mix(in srgb, var(--c-danger) 80%, transparent),
+          0 14px 36px rgba(0, 0, 0, 0.5);
+      }
     }
 
     .word.bump .word-inner {
@@ -486,12 +537,20 @@
     .word .next {
       color: #05101c;
       background: var(--accent);
-      border-radius: 4px;
-      box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 64%, transparent);
+      border-radius: 3px;
+      /* The 2.5px ring widens the chip without padding — real padding would
+         shift glyph layout on every keystroke as the chip walks the word. */
+      box-shadow:
+        0 0 0 2.5px var(--accent),
+        0 0 16px color-mix(in srgb, var(--accent) 64%, transparent);
     }
 
     .word .rest {
-      color: rgba(244, 247, 255, 0.6);
+      color: rgba(244, 247, 255, 0.78);
+    }
+
+    .word.active .rest {
+      color: rgba(244, 247, 255, 0.85);
     }
 
     .particle {
@@ -671,6 +730,18 @@
       opacity: 1;
     }
 
+    /* Remembered mode (radio "checked") — Enter starts this one */
+    .difficulty-button.selected {
+      border-color: color-mix(in srgb, var(--m-accent, var(--c-cyan)) 80%, transparent);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 55%, transparent),
+        0 0 24px color-mix(in srgb, var(--m-accent, var(--c-cyan)) 22%, transparent);
+    }
+
+    .difficulty-button.selected::before {
+      opacity: 1;
+    }
+
     .mode-name {
       display: block;
       font-family: "Space Grotesk", sans-serif;
@@ -688,6 +759,17 @@
       font-family: "JetBrains Mono", monospace;
       font-size: 12.5px;
       line-height: 1.5;
+    }
+
+    /* Per-mode personal best — progression feedback for every difficulty */
+    .mode-best {
+      display: block;
+      margin-top: 6px;
+      min-height: 15px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11.5px;
+      letter-spacing: 0.04em;
+      color: color-mix(in srgb, var(--m-accent, var(--c-cyan)) 70%, var(--ink));
     }
 
     /* Intensity bars — visual learner-progression cue */
@@ -859,36 +941,82 @@
       color: color-mix(in srgb, var(--accent) 70%, var(--muted));
     }
 
-    /* ---- Fever meter: thin top-edge bar ---- */
+    /* ---- Fever meter: top-edge bar ---- */
     .fever-meter {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      height: 4px;
+      height: 9px;
       z-index: 7;
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.07);
       pointer-events: none;
     }
 
     .fever-meter > i {
       display: block;
       height: 100%;
-      width: 0%;
+      width: 100%;
+      /* scaleX from JS (compositor-only) instead of animating width (layout). */
+      transform: scaleX(0);
+      transform-origin: left center;
+      will-change: transform;
       background: linear-gradient(90deg, var(--c-cyan), var(--c-violet), var(--c-magenta));
       box-shadow: 0 0 14px color-mix(in srgb, var(--c-magenta) 60%, transparent);
-      transition: width 120ms linear;
+    }
+
+    /* Label fades in as the meter charges past ~70%, switches to x2 while active */
+    .fever-meter::after {
+      content: "FEVER";
+      position: absolute;
+      top: 13px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.3em;
+      color: var(--c-magenta);
+      text-shadow: 0 0 12px color-mix(in srgb, var(--c-magenta) 60%, transparent);
+      opacity: 0;
+      transition: opacity 200ms var(--ease);
+    }
+
+    .fever-meter.hot::after { opacity: 0.85; }
+
+    .fever-meter.hot > i {
+      box-shadow:
+        0 0 18px var(--c-magenta),
+        0 0 34px color-mix(in srgb, var(--c-magenta) 45%, transparent);
+    }
+
+    .fever-meter.full {
+      box-shadow: 0 0 18px color-mix(in srgb, var(--c-magenta) 55%, transparent);
+    }
+
+    .fever-meter.full::after {
+      content: "FEVER x2";
+      opacity: 1;
+      animation: feverLabelPulse 0.7s ease-in-out infinite;
     }
 
     .fever-meter.full > i {
       background: linear-gradient(90deg, var(--c-amber), var(--c-magenta), var(--c-amber));
       background-size: 200% 100%;
+      box-shadow: 0 0 20px var(--c-magenta);
       animation: feverSlide 0.7s linear infinite;
     }
 
     @keyframes feverSlide {
       0% { background-position: 0 0; }
       100% { background-position: 200% 0; }
+    }
+
+    @keyframes feverLabelPulse {
+      50% {
+        text-shadow: 0 0 22px var(--c-magenta);
+        transform: translateX(-50%) scale(1.08);
+      }
     }
 
     /* ---- Fever screen state ---- */
@@ -899,6 +1027,10 @@
 
     .game-shell.fever::after { opacity: calc(0.4 + var(--beat-glow) * 0.3); }
     .game-shell.fever .danger-line { opacity: 1; }
+    /* Static inset edge glow — one paint when fever toggles, nothing per-frame */
+    .game-shell.fever .playfield {
+      box-shadow: inset 0 0 90px color-mix(in srgb, var(--c-magenta) 18%, transparent);
+    }
 
     .game-shell.fever .playfield::after {
       content: "";
@@ -963,6 +1095,22 @@
       box-shadow: 0 0 24px color-mix(in srgb, var(--c-magenta) 45%, transparent), 0 12px 30px rgba(0, 0, 0, 0.42);
     }
 
+    /* Proximity always outranks power-up decoration (the power rules above tie
+       with .word.near on specificity and would otherwise win on source order). */
+    .word.power.near .word-inner {
+      border-color: color-mix(in srgb, var(--c-amber) 80%, transparent);
+      box-shadow:
+        0 0 22px color-mix(in srgb, var(--c-amber) 45%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.46);
+    }
+
+    .word.power.near.peril .word-inner {
+      border-color: color-mix(in srgb, var(--c-danger) 88%, transparent);
+      box-shadow:
+        0 0 26px color-mix(in srgb, var(--c-danger) 55%, transparent),
+        0 14px 36px rgba(0, 0, 0, 0.5);
+    }
+
     @keyframes keyBump {
       0% { transform: scale(1); }
       40% { transform: scale(1.12); }
@@ -978,6 +1126,12 @@
     }
 
     @keyframes comboPop {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.28); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes comboPopAlt {
       0% { transform: scale(1); }
       35% { transform: scale(1.28); }
       100% { transform: scale(1); }
@@ -1012,17 +1166,18 @@
       }
     }
 
+    /* translateX(-50%) baked in: callers pass the true center x */
     @keyframes scoreFloat {
       0% {
         opacity: 0;
-        transform: translateY(8px) scale(0.9);
+        transform: translate(-50%, 8px) scale(0.9);
       }
       18% {
         opacity: 1;
       }
       100% {
         opacity: 0;
-        transform: translateY(-34px) scale(1.08);
+        transform: translate(-50%, -34px) scale(1.08);
       }
     }
 
@@ -1209,6 +1364,38 @@
       line-height: 1.45;
     }
 
+    /* Screen-reader-only live region for gameplay announcements */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      clip-path: inset(50%);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* ---- Touch mode: hidden text input (summons the soft keyboard) + pause ---- */
+    .touch-input {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      border: 0;
+      opacity: 0.01;
+      background: transparent;
+      color: transparent;
+      font-size: 16px; /* >=16px stops iOS from zooming on focus */
+      pointer-events: none;
+    }
+
+    .touch-pause { display: none; }
+    .game-shell.touch.play-active .touch-pause { display: grid; }
+
     /* ---- Forced reduced motion via Settings toggle ---- */
     .game-shell.reduced *,
     .game-shell.reduced *::before,
@@ -1220,13 +1407,30 @@
     .game-shell.reduced::after,
     .game-shell.reduced .danger-line::after,
     .game-shell.reduced .fever-meter.full > i,
+    .game-shell.reduced .fever-meter.full::after,
+    .game-shell.reduced .word.near.peril .word-inner,
     .game-shell.reduced .song-chip .song-eq i { animation: none !important; }
+
+    /* Reduced motion must not delete information: the countdown digits and
+       floating feedback labels (PERFECT!, +points, MISS, FEVER!, LEVEL N)
+       render as static opacity swaps; JS timeouts handle removal. */
+    .game-shell.reduced .countdown.show {
+      animation: none !important;
+      opacity: 1;
+    }
+
+    .game-shell.reduced .floating-score {
+      animation: none !important;
+      opacity: 1;
+      transform: translate(-50%, -10px);
+    }
 
     @media (max-width: 720px) {
       .hud {
         top: 10px;
         left: 10px;
-        right: 96px;
+        /* 10px edge + two 42px buttons + 6px gap + 6px breathing room */
+        right: 106px;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 6px;
       }
@@ -1254,7 +1458,7 @@
       }
 
       .playfield {
-        inset: 118px 0 70px;
+        inset: 118px 0 0;
       }
 
       .hud-sub {
@@ -1325,6 +1529,20 @@
       }
     }
 
+    /* Short viewports (laptop + taskbar + devtools): compact the vertical chrome.
+       JS stays in sync automatically — it re-reads --line-bottom on resize. */
+    @media (max-height: 640px) {
+      .game-shell { --line-bottom: 54px; }
+
+      .hud { top: 10px; }
+
+      .hud-card { padding: 6px 10px 7px; }
+
+      .hud-value { font-size: 18px; }
+
+      .playfield { inset: 86px 0 0; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -1349,6 +1567,19 @@
       .game-shell::before,
       .danger-line::after {
         animation: none;
+      }
+
+      /* Belt-and-braces: applySettings mirrors this preference into .reduced,
+         but keep the information-bearing elements visible even before it runs. */
+      .countdown.show {
+        animation: none !important;
+        opacity: 1;
+      }
+
+      .floating-score {
+        animation: none !important;
+        opacity: 1;
+        transform: translate(-50%, -10px);
       }
     }
   </style>
@@ -1396,20 +1627,28 @@
           <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"></path>
         </svg>
       </button>
+      <button class="mute-button touch-pause" id="touchPauseButton" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 5v14M15 5v14"></path>
+        </svg>
+      </button>
     </div>
 
     <div class="fever-meter" id="feverMeter" aria-hidden="true"><i id="feverFill"></i></div>
 
-    <section class="playfield" id="playfield" aria-label="Falling words"></section>
+    <section class="playfield" id="playfield" aria-hidden="true"></section>
     <div class="danger-line" aria-hidden="true"></div>
     <div class="miss-flash" aria-hidden="true"></div>
     <div class="countdown" id="countdown" aria-hidden="true"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="visually-hidden" id="srAnnounce" aria-live="polite"></div>
+    <input class="touch-input" id="touchInput" type="text" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1">
 
     <section class="screen" id="startScreen">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="startTitle">
         <div class="mobile-banner" id="mobileBanner" hidden>
-          ⌨️ BeatType Drop is built for a physical keyboard — hop on a laptop or desktop to play.
+          ⌨️ BeatType Drop plays best with a physical keyboard. On touch, the on-screen
+          keyboard pops up when the round starts — use the ⏸ button up top to pause.
         </div>
         <div class="eyebrow">Typing Rhythm Lab</div>
         <h1 id="startTitle">BeatType Drop</h1>
@@ -1420,21 +1659,24 @@
         <div class="start-profile" id="startProfile" aria-label="Your stats"></div>
         <div class="picker-label">Difficulty <span>— sets speed &amp; words</span></div>
         <div class="difficulty-grid" role="radiogroup" aria-label="Choose difficulty">
-          <button class="difficulty-button" type="button" data-mode="beginner">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="true" data-mode="beginner">
             <span class="mode-name">Beginner</span>
             <span class="mode-details">Warm up &middot; tiny words &middot; calm</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
             <span class="mode-key" aria-hidden="true">1</span>
           </button>
-          <button class="difficulty-button" type="button" data-mode="intermediate">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="false" data-mode="intermediate">
             <span class="mode-name">Intermediate</span>
             <span class="mode-details">In the pocket &middot; core words</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i></span>
             <span class="mode-key" aria-hidden="true">2</span>
           </button>
-          <button class="difficulty-button" type="button" data-mode="advanced">
+          <button class="difficulty-button" type="button" role="radio" aria-checked="false" data-mode="advanced">
             <span class="mode-name">Advanced</span>
             <span class="mode-details">Full send &middot; long words &middot; fast</span>
+            <span class="mode-best"></span>
             <span class="mode-intensity" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i></span>
             <span class="mode-key" aria-hidden="true">3</span>
           </button>
@@ -1443,7 +1685,7 @@
         <div class="song-picker" id="songPicker" role="radiogroup" aria-label="Choose soundtrack"></div>
         <div class="quick-help" aria-label="How to play">
           <span class="pill">Just type — it locks the lowest match</span>
-          <span class="pill"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> pick &middot; <kbd>Enter</kbd> start</span>
+          <span class="pill"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> start instantly &middot; <kbd>Enter</kbd> starts selected</span>
           <span class="pill"><kbd>Esc</kbd> pause</span>
         </div>
         <div class="legend" aria-label="Power-ups">
@@ -1557,20 +1799,42 @@
       "plant", "quick", "river", "round", "shine", "small", "sound", "space", "story", "sweet",
       "table", "thing", "today", "water", "window", "world", "another", "because", "between",
       "keyboard", "learning", "morning", "picture", "practice", "reading", "sentence", "teacher",
-      "together"
+      "together",
+      // 6-8 letter depth so mid-mode pools stay wide at high levels
+      "bridge", "camera", "candle", "castle", "cherry", "coffee", "copper", "dragon", "flower",
+      "forest", "guitar", "island", "jungle", "meadow", "orange", "pencil", "planet", "pocket",
+      "rabbit", "rocket", "silver", "summer", "ticket", "tunnel", "valley", "winter", "wizard",
+      "balloon", "blanket", "captain", "crystal", "diamond", "evening", "factory", "harvest",
+      "journey", "lantern", "library", "mystery", "painter", "pattern", "penguin", "rainbow",
+      "thunder", "village", "weather", "whisper",
+      "airplane", "birthday", "calendar", "computer", "daylight", "dinosaur", "elephant",
+      "festival", "lavender", "midnight", "mountain", "notebook", "sandwich", "starfish",
+      "sunshine", "treasure", "umbrella",
+      // 9-12 letter words so the late-game length ramp (maxLength 12) is fulfillable
+      "adventure", "beautiful", "breakfast", "butterfly", "character", "chocolate", "community",
+      "dangerous", "different", "discovery", "education", "excellent", "fireworks", "furniture",
+      "gratitude", "happiness", "important", "invention", "knowledge", "landscape", "narrative",
+      "orchestra", "paragraph", "raspberry", "signature", "telescope", "vegetable", "waterfall",
+      "wonderful", "xylophone", "yesterday",
+      "basketball", "calculator", "dictionary", "friendship", "generation", "lighthouse",
+      "playground", "strawberry", "technology", "television", "watermelon", "wilderness",
+      "celebration", "electricity", "imagination", "inspiration", "temperature",
+      "intelligence", "neighborhood", "refrigerator", "thunderstorm"
     ];
 
     const DIFFICULTIES = {
       beginner: {
         label: "Beginner",
         bpm: 70,
-        fallSeconds: 18,
+        fallSeconds: 13.5, // first word threatens ~11s in — opening minute stays alive, ~17 WPM demand
         spawnBeats: 5,
         minLength: 3,
         maxLength: 4,
-        maxWords: 3,
+        maxWords: 4, // one extra slot so the field never freezes while waiting on a single word
         basePoints: 70,
-        strikeGraceSeconds: 1.25
+        strikeGraceSeconds: 1.25,
+        feverGain: 1 / 8,   // fever in ~8 clean clears (~34s of spawn-capped play)
+        feverSeconds: 14    // covers ~4-5 words at beginner's spawn rate
       },
       intermediate: {
         label: "Intermediate",
@@ -1581,31 +1845,34 @@
         maxLength: 6,
         maxWords: 5,
         basePoints: 105,
-        strikeGraceSeconds: 0.95
+        strikeGraceSeconds: 0.95,
+        feverGain: 1 / 11,
+        feverSeconds: 8     // ~4-5 words per fever
       },
       advanced: {
         label: "Advanced",
         bpm: 132,
-        fallSeconds: 7.8,
-        spawnBeats: 2,
+        fallSeconds: 9,     // softened entry: ramp carries it down, not the starting line
+        spawnBeats: 3,      // 1.36s/word at L1 (~55 WPM entry, vs intermediate's ~31)
         minLength: 5,
         maxLength: 8,
         maxWords: 8,
         basePoints: 130,
-        strikeGraceSeconds: 0.7
+        strikeGraceSeconds: 0.7,
+        feverGain: 1 / 14,
+        feverSeconds: 6     // ~4-6 words per fever at advanced's spawn rate
       }
     };
 
     // ---- Gameplay tuning ----
     const WORDS_PER_LEVEL = 6;      // clears needed to advance a level
     const MAX_LIVES = 5;            // power-ups can lift you above the starting 3
-    const FEVER_GAIN = 1 / 14;      // meter filled per clean clear
-    const FEVER_DRAIN_ON_MISS = 0.34;
-    const FEVER_SECONDS = 6;        // fever duration
+    const FEVER_SECONDS = 6;        // fallback fever duration (per-mode feverSeconds wins)
     const FEVER_MULTIPLIER = 2;     // points multiplier during fever
     const SLOWMO_SECONDS = 5;
     const SLOWMO_FACTOR = 0.45;     // fall-speed scale while slow-mo is active
-    const POWER_MIN_GAP = 6;        // min clears/spawns between power-ups
+    const POWER_MIN_GAP = 4;        // min spawns between power-ups
+    const POWER_MIN_SECONDS = 12;   // wall-clock gate so fast modes don't get 10x the power-ups/min
     const POWER_CHANCE = 0.5;       // roll once the gap has passed
     const BONUS_POINTS = 500;
     const POWERS = {
@@ -1656,13 +1923,15 @@
     };
 
     // Selectable music — decoupled from difficulty. Files live in /audio.
+    // bpm is the measured tempo of each loop (onset autocorrelation); the beat
+    // grid follows the playing track so PERFECT windows land on the audible beat.
     const SONGS = [
-      { id: "synthwave",  name: "Synthwave",   file: "audio/synthwave.mp3",  accent: "#34ecff", tag: "retro drive" },
-      { id: "lofi",       name: "Lo-Fi",       file: "audio/lofi.mp3",       accent: "#5fe6c8", tag: "chill focus" },
-      { id: "futurebass", name: "Future Bass", file: "audio/futurebass.mp3", accent: "#7a5cff", tag: "bright + bouncy" },
-      { id: "chiptune",   name: "Chiptune",    file: "audio/chiptune.mp3",   accent: "#c6ff4d", tag: "8-bit arcade" },
-      { id: "phonk",      name: "Phonk",       file: "audio/phonk.mp3",      accent: "#ff4d9a", tag: "drift + cool" },
-      { id: "none",       name: "Beats Only",  file: null,                   accent: "#9ba7c4", tag: "synth pulse" }
+      { id: "synthwave",  name: "Synthwave",   file: "audio/synthwave.mp3",  bpm: 134, accent: "#34ecff", tag: "retro drive" },
+      { id: "lofi",       name: "Lo-Fi",       file: "audio/lofi.mp3",       bpm: 85,  accent: "#5fe6c8", tag: "chill focus" },
+      { id: "futurebass", name: "Future Bass", file: "audio/futurebass.mp3", bpm: 150, accent: "#7a5cff", tag: "bright + bouncy" },
+      { id: "chiptune",   name: "Chiptune",    file: "audio/chiptune.mp3",   bpm: 140, accent: "#c6ff4d", tag: "8-bit arcade" },
+      { id: "phonk",      name: "Phonk",       file: "audio/phonk.mp3",      bpm: 140, accent: "#ff4d9a", tag: "drift + cool" },
+      { id: "none",       name: "Beats Only",  file: null,                   bpm: 0,   accent: "#9ba7c4", tag: "synth pulse" }
     ];
     function songById(id) { return SONGS.find((s) => s.id === id) || SONGS[0]; }
 
@@ -1680,8 +1949,11 @@
       nextWordId: 1,
       lastFrame: 0,
       rafId: null,
+      playHeight: 0,
       lastBeatAt: 0,
       nextBeatAt: 0,
+      clampDebt: 0,
+      lineBottom: 70,
       nextSpawnBeat: 0,
       beatCount: 0,
       beatGlow: 0,
@@ -1689,12 +1961,16 @@
       nextStrikeAt: 0,
       muted: readStoredValue(STORAGE_KEYS.muted, "false") === "true",
       audio: null,
-      beatTimer: null,
       wordBag: [],
       recentWords: [],
       musicBuffers: {},
       musicSource: null,
+      musicGain: null,
       musicToken: 0,
+      musicRole: "game",
+      musicStartedAt: 0,
+      previewTimer: null,
+      resumePreview: false,
       baseConfig: DIFFICULTIES.beginner,
       level: 1,
       wordsCleared: 0,
@@ -1702,6 +1978,8 @@
       fever: 0,
       feverActive: false,
       feverUntil: 0,
+      feverDuration: FEVER_SECONDS,
+      lineHot: false,
       slowUntil: 0,
       correctChars: 0,
       totalPresses: 0,
@@ -1710,6 +1988,7 @@
       lastStatMs: 0,
       spawnCount: 0,
       lastPowerSpawn: -99,
+      lastPowerMs: 0,
       pauseStartMs: 0,
       trackKey: readStoredValue(STORAGE_KEYS.track, "synthwave"),
       activeMs: 0,
@@ -1721,6 +2000,8 @@
       wordErrors: 0,
       reducedMotion: false,
       countdownTimer: null,
+      countdownHeld: false,
+      settingsOpener: null,
       settings: loadSettings(),
       profile: loadProfile()
     };
@@ -1749,15 +2030,49 @@
       writeStoredValue(STORAGE_KEYS.settings, JSON.stringify(state.settings));
     }
 
+    // Slider drags fire dozens of input events per second — apply live but
+    // batch the synchronous localStorage write behind a short debounce.
+    let settingsSaveTimer = null;
+    function scheduleSettingsSave() {
+      if (settingsSaveTimer) window.clearTimeout(settingsSaveTimer);
+      settingsSaveTimer = window.setTimeout(() => {
+        settingsSaveTimer = null;
+        saveSettings();
+      }, 250);
+    }
+
     function loadProfile() {
       const base = { streak: 0, lastPlayed: "", lifetimeWords: 0, runs: 0, best: {}, keys: {} };
       try {
         const raw = JSON.parse(readStoredValue(STORAGE_KEYS.profile, "null"));
         if (raw && typeof raw === "object") {
-          return Object.assign(base, raw, {
-            best: raw.best || {},
-            keys: raw.keys || {}
-          });
+          // Coerce every numeric field — a legacy/hand-edited profile holding
+          // strings would otherwise concat ("120" + 8 = "1208") and re-persist.
+          const best = {};
+          const rawBest = raw.best && typeof raw.best === "object" ? raw.best : {};
+          for (const mode in rawBest) {
+            const b = rawBest[mode] || {};
+            best[mode] = {
+              score: Number(b.score) || 0,
+              wpm: Number(b.wpm) || 0,
+              combo: Number(b.combo) || 0,
+              level: Number(b.level) || 1
+            };
+          }
+          const keys = {};
+          const rawKeys = raw.keys && typeof raw.keys === "object" ? raw.keys : {};
+          for (const k in rawKeys) {
+            const r = rawKeys[k] || {};
+            keys[k] = { hit: Number(r.hit) || 0, miss: Number(r.miss) || 0 };
+          }
+          return {
+            streak: Number(raw.streak) || 0,
+            lastPlayed: typeof raw.lastPlayed === "string" ? raw.lastPlayed : "",
+            lifetimeWords: Number(raw.lifetimeWords) || 0,
+            runs: Number(raw.runs) || 0,
+            best,
+            keys
+          };
         }
       } catch (error) {}
       return base;
@@ -1800,7 +2115,21 @@
     }
 
     function beatInterval() {
+      // The grid follows the playing track's real tempo; the difficulty bpm
+      // covers "Beats Only", load failures, and the moment before the bed starts.
+      const song = songById(state.trackKey);
+      if (song.bpm && state.musicRole === "game" && isMusicPlaying()) {
+        return 60 / song.bpm;
+      }
       return 60 / state.config.bpm;
+    }
+
+    // Difficulty defines its cadence in seconds (spawnBeats at the mode bpm);
+    // convert to whole grid beats so word pressure stays roughly equivalent no
+    // matter which track tempo drives the grid.
+    function spawnBeatStep() {
+      const seconds = state.config.spawnBeats * (60 / state.config.bpm);
+      return Math.max(1, Math.round(seconds / beatInterval()));
     }
 
     function cleanWord(word) {
@@ -1814,9 +2143,17 @@
 
     function resetWordBag() {
       const cfg = state.config;
-      const inRange = (word) => word.length >= cfg.minLength && word.length <= cfg.maxLength;
-      const pool = availableWords().filter(inRange);
-      const builtInFallback = BUILT_IN_WORDS.map(cleanWord).filter(Boolean).filter(inRange);
+      const all = availableWords();
+      // Relax minLength until the pool holds ≥30 candidates so the late-game
+      // bag never collapses into the 10-word anti-repeat buffer.
+      let minLen = cfg.minLength;
+      let pool = all.filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
+      while (minLen > 3 && pool.length < 30) {
+        minLen -= 1;
+        pool = all.filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
+      }
+      const builtInFallback = BUILT_IN_WORDS.map(cleanWord).filter(Boolean)
+        .filter((w) => w.length >= minLen && w.length <= cfg.maxLength);
       state.wordBag = (pool.length ? pool : builtInFallback).slice();
       shuffle(state.wordBag);
     }
@@ -1847,17 +2184,58 @@
         attempts += 1;
       }
 
+      return word;
+    }
+
+    // Recent-word bookkeeping happens only for words that actually spawn —
+    // candidates rejected by the first-letter dedup go back into the bag instead.
+    function commitWord(word) {
       state.recentWords.push(word);
       if (state.recentWords.length > 10) {
         state.recentWords.shift();
       }
-      return word;
     }
 
     function setScreen(which) {
       els.start.classList.toggle("hidden", which !== "start");
       els.over.classList.toggle("hidden", which !== "over");
       els.pause.classList.toggle("hidden", which !== "pause");
+      updateModalGuards();
+    }
+
+    // The topmost open aria-modal dialog (settings stacks above the others).
+    function openModalEl() {
+      if (settingsOpen()) return els.settingsScreen;
+      if (els.start && !els.start.classList.contains("hidden")) return els.start;
+      if (els.over && !els.over.classList.contains("hidden")) return els.over;
+      if (els.pause && !els.pause.classList.contains("hidden")) return els.pause;
+      return null;
+    }
+
+    // HUD buttons must not be keyboard-reachable while a modal dialog is open
+    // (they stay mouse-clickable; the focus trap owns Tab order).
+    function updateModalGuards() {
+      const open = !!openModalEl();
+      [els.mute, els.settingsButton].forEach((button) => {
+        if (button) button.tabIndex = open ? -1 : 0;
+      });
+    }
+
+    // Minimal focus trap: Tab cycles through the open dialog's controls only.
+    function trapTab(event, modal) {
+      event.preventDefault();
+      const focusables = Array.from(modal.querySelectorAll(
+        "button:not([disabled]):not([tabindex='-1']), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex='0']"
+      )).filter((el) => el.offsetParent !== null);
+      if (!focusables.length) return;
+      const index = focusables.indexOf(document.activeElement);
+      let next;
+      if (event.shiftKey) {
+        next = index <= 0 ? focusables[focusables.length - 1] : focusables[index - 1];
+      } else {
+        next = index === -1 || index === focusables.length - 1 ? focusables[0] : focusables[index + 1];
+      }
+      try { next.focus(); } catch (error) {}
     }
 
     function setShellMode(modeKey) {
@@ -1868,15 +2246,20 @@
     }
 
     let hudComboShown = 1;
+    // Per-frame write caches: skip DOM writes when the rendered value is unchanged.
+    let lastGlowStr = null;
+    let lastShakeStr = null;
+    let lastFeverFrac = -1;
 
     function updateHud() {
       els.score.textContent = state.score.toLocaleString();
       const mult = comboMultiplier();
       els.combo.textContent = "x" + mult.toFixed(1);
       if (mult > hudComboShown + 0.0001) {
-        els.combo.classList.remove("pop");
-        void els.combo.offsetWidth;
+        // Alternate between twin keyframe names to restart the animation —
+        // avoids the forced synchronous layout of the offsetWidth hack.
         els.combo.classList.add("pop");
+        els.combo.classList.toggle("pop-alt");
       }
       hudComboShown = mult;
       renderLives();
@@ -1885,12 +2268,29 @@
 
     function renderLives() {
       const lives = Math.max(0, Math.min(state.maxLives, state.lives));
-      let html = "<span class=\"lives-pips\">";
-      for (let i = 0; i < lives; i += 1) {
-        html += "<span class=\"life-pip\"></span>";
+      let pips = els.lives.firstElementChild;
+      // The row holds the highest life count reached this run; updates only
+      // toggle .lost per pip, so lost lives stay visible as dimmed pips and
+      // the .lost transition can play (startGame empties the row per run).
+      if (!pips || pips.childElementCount < lives) {
+        let html = "<span class=\"lives-pips\">";
+        for (let i = 0; i < lives; i += 1) {
+          html += "<span class=\"life-pip\"></span>";
+        }
+        html += "</span>";
+        els.lives.innerHTML = html;
+        pips = els.lives.firstElementChild;
       }
-      html += "</span>";
-      els.lives.innerHTML = html;
+      for (let i = 0; i < pips.children.length; i += 1) {
+        const pip = pips.children[i];
+        const lost = i >= lives;
+        if (lost !== pip.classList.contains("lost")) {
+          pip.classList.toggle("lost", lost);
+          // Flash the pip that just died; pop one regained from the ♥ power-up.
+          pip.classList.remove("flash", "gained");
+          restartAnimation(pip, lost ? "flash" : "gained");
+        }
+      }
       els.lives.setAttribute("aria-label", lives + " lives");
     }
 
@@ -1905,18 +2305,26 @@
     // ---- Difficulty ramp ----
     function deriveConfig(base, level) {
       const l = Math.max(0, level - 1);
-      const spawnFloor = base.spawnBeats <= 2 ? 1 : 2;
+      // Cadence floor is 2 beats for every mode and the step-down lands every 4
+      // levels, not 2 — advanced ramps 1.36s/word (L1, ~55 WPM) to 0.91s (L5+,
+      // ~95-110 effective WPM with longer words) instead of a 158+ WPM wall at L3.
+      const spawnBeats = Math.max(2, base.spawnBeats - Math.floor(l / 4));
       return {
         label: base.label,
-        bpm: base.bpm, // fixed so the music bed stays in sync
+        bpm: base.bpm, // defines spawn cadence in seconds; the beat grid itself follows the chosen track
         fallSeconds: Math.max(base.fallSeconds * 0.42, base.fallSeconds * Math.pow(0.93, l)),
-        spawnBeats: Math.max(spawnFloor, base.spawnBeats - Math.floor(l / 2)),
+        spawnBeats,
         // Words grow longer as you climb — leveling up means typing better, not just faster.
         minLength: Math.min(base.minLength + 2, base.minLength + Math.floor(l / 4)),
         maxLength: Math.min(12, base.maxLength + Math.floor(l / 2)),
         maxWords: Math.min(base.maxWords + 4, base.maxWords + Math.floor(l / 2)),
         basePoints: base.basePoints,
-        strikeGraceSeconds: base.strikeGraceSeconds
+        // Grace only forgives near-simultaneous pileups: keep it below the spawn
+        // interval at every level (~0.55s on advanced L5+) so flooding never makes
+        // alternate misses permanently free.
+        strikeGraceSeconds: Math.min(base.strikeGraceSeconds, spawnBeats * (60 / base.bpm) * 0.6),
+        feverGain: base.feverGain,
+        feverSeconds: base.feverSeconds
       };
     }
 
@@ -1937,8 +2345,9 @@
       els.shell.classList.add("level-pulse");
       window.setTimeout(() => els.shell.classList.remove("level-pulse"), 700);
       const pr = els.playfield.getBoundingClientRect();
-      spawnFloatingLabel(pr.width / 2 - 36, 64, "LEVEL " + state.level, "#c6ff4d");
+      spawnFloatingLabel(pr.width / 2, 64, "LEVEL " + state.level, "#c6ff4d");
       playLevelUp();
+      announce("Level " + state.level);
     }
 
     // ---- Fever / overdrive ----
@@ -1954,22 +2363,34 @@
     }
 
     function setMusicGain(target, ramp) {
-      if (!state.audio || !state.musicSource || state.muted) return;
+      // No muted guard: mute lives on the master gain, so the music bus must
+      // keep tracking the correct level or fever boosts leak past unmute.
+      if (!state.audio || !state.musicSource) return;
       const now = state.audio.ctx.currentTime;
       state.audio.music.gain.cancelScheduledValues(now);
       state.audio.music.gain.setValueAtTime(Math.max(0.0001, state.audio.music.gain.value), now);
       state.audio.music.gain.linearRampToValueAtTime(target, now + ramp);
     }
 
+    // Single source of truth for where the music bus should sit right now:
+    // preview attenuation on the start screen, fever boost during overdrive.
+    function currentMusicLevel() {
+      const preview = state.musicRole === "preview" ? 0.55 : 1;
+      return musicLevel() * preview * (state.feverActive ? 1.35 : 1);
+    }
+
     function activateFever() {
       state.feverActive = true;
       state.fever = 1;
-      state.feverUntil = nowSeconds() + FEVER_SECONDS;
+      // Per-mode duration so fever covers ~4-6 words on every difficulty.
+      state.feverDuration = state.config.feverSeconds || FEVER_SECONDS;
+      state.feverUntil = nowSeconds() + state.feverDuration;
       els.shell.classList.add("fever");
-      setMusicGain(musicLevel() * 1.35, 0.3);
+      setMusicGain(currentMusicLevel(), 0.3);
       const pr = els.playfield.getBoundingClientRect();
-      spawnFloatingLabel(pr.width / 2 - 40, 112, "FEVER!", "#ff4d9a");
+      spawnFloatingLabel(pr.width / 2, 112, "FEVER!", "#ff4d9a");
       playFever();
+      announce("Fever — double points");
     }
 
     function endFever() {
@@ -1977,16 +2398,26 @@
       state.feverActive = false;
       state.fever = 0;
       els.shell.classList.remove("fever");
-      setMusicGain(musicLevel(), 0.6);
+      setMusicGain(currentMusicLevel(), 0.6);
     }
 
     function updateFeverMeter() {
       let frac = state.fever;
       if (state.feverActive) {
-        frac = Math.max(0, (state.feverUntil - nowSeconds()) / FEVER_SECONDS);
+        frac = Math.max(0, (state.feverUntil - nowSeconds()) / (state.feverDuration || FEVER_SECONDS));
       }
-      if (els.feverFill) els.feverFill.style.width = (frac * 100).toFixed(1) + "%";
-      if (els.feverMeter) els.feverMeter.classList.toggle("full", state.feverActive);
+      // scaleX (compositor) instead of width (layout); quantize to 0.1% and
+      // skip the write when unchanged so idle rAF frames cost nothing here.
+      const quantized = Math.round(Math.max(0, Math.min(1, frac)) * 1000) / 1000;
+      if (els.feverFill && quantized !== lastFeverFrac) {
+        lastFeverFrac = quantized;
+        els.feverFill.style.transform = "scaleX(" + quantized + ")";
+      }
+      if (els.feverMeter) {
+        els.feverMeter.classList.toggle("full", state.feverActive);
+        // "Almost there" glow + label once the charge passes 70%.
+        els.feverMeter.classList.toggle("hot", !state.feverActive && frac >= 0.7);
+      }
     }
 
     // ---- Live stats (WPM / accuracy) ----
@@ -2004,14 +2435,16 @@
       rec[field] += 1;
     }
 
-    // Did this clear land within ±110ms of a beat?
+    // Did this clear land on the beat? Window scales with tempo (±18% of the
+    // interval, clamped 70-140ms) so PERFECT feels equally strict on every mode.
     function isOnBeat() {
       const interval = beatInterval();
       if (!interval || !state.lastBeatAt) return false;
       const since = nowSeconds() - state.lastBeatAt;
       const phase = ((since % interval) + interval) % interval;
       const dist = Math.min(phase, interval - phase);
-      return dist <= 0.11;
+      const tol = Math.min(0.14, Math.max(0.07, interval * 0.18));
+      return dist <= tol;
     }
 
     function currentAccuracy() {
@@ -2021,7 +2454,9 @@
 
     function updateLiveStats() {
       const wpm = currentWpm();
-      if (wpm > state.peakWpm) state.peakWpm = wpm;
+      // Peak only publishes after ~3s of active typing — one fast early word
+      // can't pin an inflated number for the whole run.
+      if (state.activeMs >= 3000 && wpm > state.peakWpm) state.peakWpm = wpm;
       if (els.wpm) els.wpm.textContent = wpm;
       if (els.acc) els.acc.textContent = currentAccuracy() + "%";
     }
@@ -2030,6 +2465,9 @@
     function maybePowerType() {
       if (state.words.some((w) => w.power)) return null;
       if (state.spawnCount - state.lastPowerSpawn < POWER_MIN_GAP) return null;
+      // Elapsed-time gate: roughly one power per ~12-20s on every mode, instead
+      // of spawn-count-only (which gave advanced ~10x the power-ups per minute).
+      if (performance.now() - state.lastPowerMs < POWER_MIN_SECONDS * 1000) return null;
       if (Math.random() > POWER_CHANCE) return null;
       const pool = ["bonus", "bonus", "slow", "slow", "clear"];
       pool.push(state.lives < state.maxLives ? "life" : "bonus");
@@ -2039,7 +2477,8 @@
     function applyPower(type, x, y) {
       const def = POWERS[type];
       if (type === "bonus") {
-        const pts = BONUS_POINTS * (state.feverActive ? FEVER_MULTIPLIER : 1);
+        // Combo-scaled so the bonus star stays exciting deep into a streak.
+        const pts = Math.round(BONUS_POINTS * comboMultiplier()) * (state.feverActive ? FEVER_MULTIPLIER : 1);
         state.score += pts;
         spawnFloatingLabel(x, y - 30, "+" + pts, def.color);
       } else if (type === "life") {
@@ -2051,21 +2490,31 @@
         spawnFloatingLabel(x, y - 30, def.label, def.color);
       } else if (type === "clear") {
         let swept = 0;
-        const pr = els.playfield.getBoundingClientRect();
+        // Positions come from tracked state (x/y/width/height are already
+        // maintained by the loop) — no getBoundingClientRect per word, so the
+        // sweep never interleaves layout reads with the removals below.
+        // Cap per-word particles on big sweeps to bound the one-frame DOM churn.
+        const perWord = state.words.length > 5 ? 8 : undefined;
+        // Swept words pay half a typed clear each (combo + fever scaled) and
+        // bank half fever credit, so the sweep is an escape hatch, not a score trap.
+        let perWordPts = Math.round(state.config.basePoints * 0.5 * comboMultiplier());
+        if (state.feverActive) perWordPts *= FEVER_MULTIPLIER;
         for (let i = state.words.length - 1; i >= 0; i -= 1) {
           const w = state.words[i];
-          const r = w.el.getBoundingClientRect();
-          spawnBurst(r.left - pr.left + r.width / 2, r.top - pr.top + r.height / 2, 40);
+          spawnBurst(w.x + w.width / 2, w.y + w.height / 2, perWordPts, perWord);
           w.el.remove();
           state.words.splice(i, 1);
           swept += 1;
         }
         state.targetId = null;
-        const pts = swept * 40;
+        const pts = swept * perWordPts;
         state.score += pts;
+        addFever(state.config.feverGain * 0.5 * swept);
         spawnFloatingLabel(x, y - 30, def.label + (pts ? " +" + pts : ""), def.color);
       }
       playPower(type);
+      const srMsg = { bonus: "Bonus points", life: "Extra life", slow: "Slow motion", clear: "Screen cleared" }[type];
+      if (srMsg) announce(srMsg);
     }
 
     function updateMuteButton() {
@@ -2132,8 +2581,9 @@
         const now = state.audio.ctx.currentTime;
         state.audio.sfx.gain.setTargetAtTime(SFX_LEVEL * state.settings.sfxVol, now, 0.02);
         if (state.musicSource) {
-          const lvl = state.feverActive ? musicLevel() * 1.35 : musicLevel();
-          state.audio.music.gain.setTargetAtTime(Math.max(0.0001, lvl), now, 0.05);
+          // currentMusicLevel keeps the start-screen preview attenuated and the
+          // fever boost intact when sliders move mid-state.
+          state.audio.music.gain.setTargetAtTime(Math.max(0.0001, currentMusicLevel()), now, 0.05);
         }
       }
     }
@@ -2213,7 +2663,8 @@
     }
 
     // Missed word: a soft descending two-step "aww", filtered so it never bites.
-    function playMiss() {
+    // soft=true is the quieter grace-window variant — audible, but no music duck.
+    function playMiss(soft) {
       const audio = ensureAudio();
       if (!audio || state.muted) return;
 
@@ -2227,14 +2678,14 @@
       filter.type = "lowpass";
       filter.frequency.value = 1400;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(soft ? 0.09 : 0.22, t + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(audio.sfx);
       osc.start(t);
       osc.stop(t + 0.36);
-      duckMusic();
+      if (!soft) duckMusic();
     }
 
     // Level up: a quick ascending major arpeggio.
@@ -2341,19 +2792,30 @@
     async function loadMusicBuffer(trackKey) {
       const audio = ensureAudio();
       if (!audio) return null;
-      if (state.musicBuffers[trackKey]) return state.musicBuffers[trackKey];
-      const song = songById(trackKey);
-      if (!song || !song.file) return null;
-      try {
-        const res = await fetch(song.file, { cache: "force-cache" });
-        if (!res.ok) return null;
-        const data = await res.arrayBuffer();
-        const buffer = await audio.ctx.decodeAudioData(data);
-        state.musicBuffers[trackKey] = buffer;
-        return buffer;
-      } catch (error) {
-        return null;
+      if (!state.musicBuffers[trackKey]) {
+        const song = songById(trackKey);
+        if (!song || !song.file) return null;
+        // Cache the in-flight promise (not the decoded buffer) so rapid
+        // song-chip clicks can't fire duplicate fetch + decodeAudioData work.
+        state.musicBuffers[trackKey] = (async () => {
+          try {
+            const res = await fetch(song.file, { cache: "force-cache" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const data = await res.arrayBuffer();
+            return await audio.ctx.decodeAudioData(data);
+          } catch (error) {
+            delete state.musicBuffers[trackKey]; // failed loads stay retryable
+            return null;
+          }
+        })();
+        // Decoded PCM runs ~25 MB per track — keep at most two resident
+        // (the one just requested plus the currently selected track).
+        const stale = Object.keys(state.musicBuffers).filter((key) => key !== trackKey && key !== state.trackKey);
+        while (Object.keys(state.musicBuffers).length > 2 && stale.length) {
+          delete state.musicBuffers[stale.shift()];
+        }
       }
+      return state.musicBuffers[trackKey];
     }
 
     function stopMusic(fadeSeconds) {
@@ -2361,13 +2823,19 @@
       state.musicToken += 1; // cancel any in-flight startMusic
       if (!audio || !state.musicSource) return;
       const source = state.musicSource;
+      const srcGain = state.musicGain;
       state.musicSource = null;
+      state.musicGain = null;
       const fade = typeof fadeSeconds === "number" ? fadeSeconds : 0.25;
       const now = audio.ctx.currentTime;
       try {
-        audio.music.gain.cancelScheduledValues(now);
-        audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
-        audio.music.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+        // Fade on the per-source gain so a new track starting on the shared
+        // bus can't cancel this ramp and hard-cut the old one.
+        if (srcGain) {
+          srcGain.gain.cancelScheduledValues(now);
+          srcGain.gain.setValueAtTime(Math.max(0.0001, srcGain.gain.value), now);
+          srcGain.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+        }
         source.stop(now + fade + 0.02);
       } catch (error) {
         try { source.stop(); } catch (e) {}
@@ -2377,36 +2845,71 @@
     async function startMusic(trackKey) {
       const audio = ensureAudio();
       if (!audio) return;
-      stopMusic(0.1);
+      stopMusic(0.12);
       const song = songById(trackKey);
       if (!song.file) return; // "Beats Only" — rely on the fallback kick
       const token = state.musicToken;
       const buffer = await loadMusicBuffer(trackKey);
       // Bail if the player changed song or left play while we were loading.
-      if (!buffer || token !== state.musicToken || state.status !== "playing" || state.trackKey !== trackKey) {
+      if (token !== state.musicToken || state.status !== "playing" || state.trackKey !== trackKey) {
+        return;
+      }
+      if (!buffer) {
+        toast("Couldn’t load “" + song.name + "” — playing beats only");
         return;
       }
       const source = audio.ctx.createBufferSource();
       source.buffer = buffer;
       source.loop = true;
-      source.connect(audio.music);
+      const srcGain = audio.ctx.createGain();
+      source.connect(srcGain);
+      srcGain.connect(audio.music);
       const now = audio.ctx.currentTime;
-      audio.music.gain.cancelScheduledValues(now);
-      audio.music.gain.setValueAtTime(0.0001, now);
-      audio.music.gain.exponentialRampToValueAtTime(Math.max(0.0001, musicLevel()), now + 0.9);
-      source.start(now);
+      // Per-source fade-in; the bus jumps straight to the in-game level.
+      srcGain.gain.setValueAtTime(0.0001, now);
+      srcGain.gain.exponentialRampToValueAtTime(1, now + 0.9);
+      state.musicRole = "game";
       state.musicSource = source;
+      state.musicGain = srcGain;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+      audio.music.gain.linearRampToValueAtTime(Math.max(0.0001, currentMusicLevel()), now + 0.15);
+      source.start(now);
+      // Phase-align the beat grid to the moment the track actually starts.
+      state.musicStartedAt = now;
+      syncBeatGridToMusic();
     }
 
     function duckMusic() {
       const audio = state.audio;
       if (!audio || !state.musicSource) return;
       const now = audio.ctx.currentTime;
-      const lvl = Math.max(0.0001, musicLevel());
+      const lvl = Math.max(0.0001, currentMusicLevel());
       audio.music.gain.cancelScheduledValues(now);
       audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
       audio.music.gain.linearRampToValueAtTime(lvl * 0.32, now + 0.06);
       audio.music.gain.linearRampToValueAtTime(lvl, now + 0.55);
+    }
+
+    // Anchor the perf-clock beat grid to the music clock so beats land on the
+    // audible track. ctx.currentTime freezes during suspend() in step with the
+    // frozen buffer, so this also restores phase across pause/resume.
+    function syncBeatGridToMusic() {
+      if (!state.audio || !state.musicSource || state.musicRole !== "game") return false;
+      const interval = beatInterval();
+      if (!interval) return false;
+      let elapsed = state.audio.ctx.currentTime - state.musicStartedAt;
+      const duration = state.musicSource.buffer ? state.musicSource.buffer.duration : 0;
+      if (duration > 0 && elapsed >= duration) {
+        // Keep the anchor inside the current loop pass — the file is rarely an
+        // exact beat multiple, so re-anchor at every wrap.
+        state.musicStartedAt += Math.floor(elapsed / duration) * duration;
+        elapsed = state.audio.ctx.currentTime - state.musicStartedAt;
+      }
+      const phase = ((elapsed % interval) + interval) % interval;
+      state.lastBeatAt = nowSeconds() - phase;
+      state.nextBeatAt = state.lastBeatAt + interval;
+      return true;
     }
 
     function startBeatLoop(playOpeningBeat) {
@@ -2421,17 +2924,23 @@
         triggerBeat(true);
       }
       state.nextBeatAt = nowSeconds() + beatInterval();
+      // Resuming mid-track: re-anchor the grid to the music's frozen position.
+      syncBeatGridToMusic();
     }
 
     function stopBeatLoop() {
-      if (state.beatTimer) {
-        clearInterval(state.beatTimer);
-        state.beatTimer = null;
-      }
       state.nextBeatAt = 0;
     }
 
     function processBeats(currentTime) {
+      // Re-anchor once per music-loop wrap so grid phase survives imperfect loop lengths.
+      if (state.musicSource && state.audio && state.musicRole === "game") {
+        const duration = state.musicSource.buffer ? state.musicSource.buffer.duration : 0;
+        if (duration > 0 && state.audio.ctx.currentTime - state.musicStartedAt >= duration) {
+          syncBeatGridToMusic();
+        }
+      }
+
       if (!state.nextBeatAt) {
         state.nextBeatAt = currentTime + beatInterval();
         return;
@@ -2439,17 +2948,21 @@
 
       let triggered = 0;
       while (currentTime >= state.nextBeatAt && triggered < 4) {
-        triggerBeat(false);
+        // Catch-up beats keep the counter/audio in sync but never spawn —
+        // at most one spawn per frame so words can't stack at identical y.
+        triggerBeat(false, triggered > 0, state.nextBeatAt);
         state.nextBeatAt += beatInterval();
         triggered += 1;
       }
 
       if (triggered === 4 && currentTime >= state.nextBeatAt) {
-        state.nextBeatAt = currentTime + beatInterval();
+        if (!syncBeatGridToMusic()) {
+          state.nextBeatAt = currentTime + beatInterval();
+        }
       }
     }
 
-    function triggerBeat(forceSpawn) {
+    function triggerBeat(forceSpawn, skipSpawn, scheduledAt) {
       const audio = ensureAudio();
       const time = audio ? audio.ctx.currentTime : 0;
       const isDownbeat = state.beatCount % 4 === 0;
@@ -2460,11 +2973,16 @@
       }
 
       state.beatGlow = 1;
-      state.lastBeatAt = nowSeconds();
+      // Stamp the grid-scheduled time, not rAF firing time: catch-up beats after
+      // a stall must not grant a free PERFECT window, and on-time beats shouldn't
+      // inherit up-to-a-frame of rAF jitter.
+      state.lastBeatAt = typeof scheduledAt === "number" ? scheduledAt : nowSeconds();
 
-      if ((forceSpawn || state.beatCount >= state.nextSpawnBeat) && state.words.length < state.config.maxWords) {
+      // nextSpawnBeat is not advanced on skipped catch-up beats, so the next
+      // real beat spawns immediately and the cadence self-heals.
+      if (!skipSpawn && (forceSpawn || state.beatCount >= state.nextSpawnBeat) && state.words.length < state.config.maxWords) {
         spawnWord();
-        state.nextSpawnBeat = state.beatCount + state.config.spawnBeats;
+        state.nextSpawnBeat = state.beatCount + spawnBeatStep();
       }
 
       state.beatCount += 1;
@@ -2483,18 +3001,22 @@
       state.config = deriveConfig(state.baseConfig, 1);
       setShellMode(state.modeKey);
       state.status = "countdown";
+      state.countdownHeld = false;
       state.words = [];
       state.targetId = null;
       state.score = 0;
       state.combo = 0;
       state.bestCombo = 0;
       state.lives = 3;
+      els.lives.innerHTML = ""; // fresh pip row — drop dimmed pips from the last run
       state.nextWordId = 1;
       state.beatCount = 0;
       state.nextBeatAt = 0;
+      state.clampDebt = 0;
       state.nextSpawnBeat = 0;
       state.beatGlow = 0;
       state.shakeTimer = 0;
+      state.playHeight = 0; // re-measure on the first frame of the new run
       state.nextStrikeAt = 0;
       state.recentWords = [];
       state.wordsCleared = 0;
@@ -2515,6 +3037,9 @@
       state.lastStatMs = state.runStartMs;
       state.spawnCount = 0;
       state.lastPowerSpawn = 0;
+      // Stamp now: with the countdown, the first power-up lands ~9-10s into play —
+      // early enough to be an onboarding hook, even on beginner.
+      state.lastPowerMs = performance.now();
       resetTransientFx();
       if (els.level) els.level.textContent = "LVL 1";
       els.playfield.innerHTML = "";
@@ -2526,20 +3051,26 @@
       closeSettings();
       setScreen("none");
       els.shell.classList.add("play-active");
+      updateDifficultySelection();
+      // Focus inside the tap gesture so the soft keyboard is allowed to appear.
+      focusTouchInput();
       startCountdown();
     }
 
     // 3-2-1-GO on-beat countdown so first-timers get their hands ready.
-    function startCountdown() {
+    // With `resume` set it runs a short READY-GO and unfreezes the paused run
+    // instead of resetting anything.
+    function startCountdown(resume) {
       cancelCountdown();
       ensureAudio();
       if (state.audio && state.audio.ctx.state === "suspended") {
         state.audio.ctx.resume();
       }
-      const steps = ["3", "2", "1", "GO"];
+      const steps = resume ? ["READY", "GO"] : ["3", "2", "1", "GO"];
+      const expected = resume ? "resuming" : "countdown";
       let i = 0;
       const tick = () => {
-        if (state.status !== "countdown") return;
+        if (state.status !== expected) return;
         const label = steps[i];
         if (els.countdown) {
           els.countdown.textContent = label;
@@ -2553,11 +3084,24 @@
         } else {
           state.countdownTimer = window.setTimeout(() => {
             if (els.countdown) els.countdown.classList.remove("show");
-            beginPlay();
+            if (resume) completeResume();
+            else beginPlay();
           }, 450);
         }
       };
       tick();
+    }
+
+    // Esc / tab-hide during the 3-2-1: freeze the countdown instead of
+    // discarding the run. showPause surfaces the pause dialog (Esc path);
+    // the tab-hide path holds silently and auto-restarts on return.
+    function holdCountdown(showPause) {
+      cancelCountdown();
+      state.countdownHeld = true;
+      if (showPause) {
+        setScreen("pause");
+        focusFirst(els.pause);
+      }
     }
 
     function beginPlay() {
@@ -2569,6 +3113,7 @@
       state.activeMs = 0;
       startBeatLoop(true);
       startMusic(state.trackKey);
+      focusTouchInput(); // keep the soft keyboard up if it was dismissed mid-countdown
       state.lastFrame = performance.now();
       state.rafId = requestAnimationFrame(loop);
     }
@@ -2622,13 +3167,18 @@
       }
       clearWords();
       updateLiveStats();
-      updateProfileOnRun();
+      const isPB = updateProfileOnRun();
 
       const overModal = els.over.querySelector(".modal");
       if (state.score > state.highScore) {
         state.highScore = state.score;
         writeStoredValue(STORAGE_KEYS.highScore, String(state.highScore));
         els.gameOverCopy.textContent = "New high score! That one landed right on the beat.";
+        if (overModal) overModal.classList.add("new-high");
+      } else if (isPB && state.score > 0) {
+        // Per-mode personal best — celebrate even when the global high (set on a
+        // harder mode) is out of reach.
+        els.gameOverCopy.textContent = "New " + state.config.label + " best! Your top run on this mode.";
         if (overModal) overModal.classList.add("new-high");
       } else {
         els.gameOverCopy.textContent = getRunMessage();
@@ -2652,8 +3202,11 @@
         els.streakStat.textContent = "🔥 " + (state.profile.streak || 1) + " day streak";
       }
       updateHud();
+      closeSettings(); // never stack game-over underneath the settings overlay
       setScreen("over");
       focusFirst(els.over);
+      if (els.touchInput) els.touchInput.blur(); // drop the soft keyboard
+      announce("Game over — score " + state.score.toLocaleString());
     }
 
     function pauseGame() {
@@ -2670,10 +3223,43 @@
         state.rafId = null;
       }
       setScreen("pause");
+      focusFirst(els.pause);
+      if (els.touchInput) els.touchInput.blur(); // soft keyboard off the pause dialog
     }
 
     function resumeGame() {
+      // A countdown held via Esc/tab-hide: restart the 3-2-1 instead.
+      if (state.status === "countdown" && state.countdownHeld) {
+        state.countdownHeld = false;
+        setScreen("none");
+        focusTouchInput();
+        startCountdown();
+        return;
+      }
       if (state.status !== "paused") return;
+      // Short READY-GO before motion restarts — words frozen in the peril zone
+      // would otherwise strike before the player's hands are back on the keys.
+      state.status = "resuming";
+      setScreen("none");
+      focusTouchInput();
+      startCountdown(true);
+    }
+
+    // Back out of an in-flight resume countdown (Esc or tab-hide) to the pause
+    // screen; pauseStartMs is untouched so the eventual resume shift stays correct.
+    function holdResume() {
+      if (state.status !== "resuming") return;
+      cancelCountdown();
+      state.status = "paused";
+      if (state.audio && state.audio.ctx.state === "running") {
+        state.audio.ctx.suspend();
+      }
+      setScreen("pause");
+      focusFirst(els.pause);
+    }
+
+    function completeResume() {
+      if (state.status !== "resuming") return;
       state.status = "playing";
       // Shift time-based timers forward by the paused duration so fever / slow-mo /
       // WPM aren't penalised for the break.
@@ -2684,8 +3270,13 @@
       state.feverUntil += pausedSec;
       state.slowUntil += pausedSec;
       state.nextStrikeAt += pausedSec;
+      state.lastPowerMs += pausedMs;
+      state.lastKeyMs = 0; // a fresh burst — paused wall-clock must not count as active typing
       state.lastFrame = performance.now();
       startBeatLoop(false);
+      // A pause during the initial track load abandons the in-flight startMusic
+      // (it bails when status leaves "playing") — retry here or the run stays silent.
+      if (!state.musicSource) startMusic(state.trackKey);
       setScreen("none");
       if (state.rafId !== null) {
         cancelAnimationFrame(state.rafId);
@@ -2702,21 +3293,30 @@
     function spawnWord() {
       const playRect = els.playfield.getBoundingClientRect();
       state.spawnCount += 1;
-      const powerType = maybePowerType();
+      // Avoid spawning a word whose first letter collides with an un-started word —
+      // keeps auto-targeting unambiguous in a crowded field.
+      const taken = new Set(state.words.filter((w) => w.progress === 0).map((w) => w.text[0]));
+      let powerType = maybePowerType();
+      // Power words have fixed text — if the first letter is ambiguous, defer the
+      // power to a later spawn (lastPowerSpawn stays untouched so it re-rolls soon).
+      if (powerType && taken.has(POWERS[powerType].word[0])) {
+        powerType = null;
+      }
       let text;
       if (powerType) {
         text = POWERS[powerType].word;
       } else {
-        // Avoid spawning a word whose first letter collides with an un-started word —
-        // keeps auto-targeting unambiguous in a crowded field.
-        const taken = new Set(state.words.filter((w) => w.progress === 0).map((w) => w.text[0]));
         text = pickWord();
         let tries = 0;
-        while (taken.has(text[0]) && tries < 5) { text = pickWord(); tries += 1; }
+        while (taken.has(text[0]) && tries < 5) {
+          state.wordBag.unshift(text); // return the rejected candidate to the bag
+          text = pickWord();
+          tries += 1;
+        }
+        commitWord(text);
       }
       const el = document.createElement("div");
       el.className = "word" + (powerType ? " power power-" + powerType : "");
-      el.setAttribute("aria-label", (powerType ? "power up " : "") + text);
       const word = {
         id: state.nextWordId,
         text,
@@ -2724,6 +3324,7 @@
         x: 0,
         y: -50,
         width: 120,
+        height: 44,
         el,
         power: powerType || null,
         errors: 0,
@@ -2732,6 +3333,7 @@
       };
       if (powerType) {
         state.lastPowerSpawn = state.spawnCount;
+        state.lastPowerMs = performance.now();
       }
       state.nextWordId += 1;
       renderWord(word);
@@ -2739,30 +3341,45 @@
 
       const rect = el.getBoundingClientRect();
       word.width = rect.width;
+      word.height = rect.height;
       const lanePadding = 18;
       const maxX = Math.max(lanePadding, playRect.width - rect.width - lanePadding);
-      word.x = chooseLaneX(maxX, lanePadding);
+      const lane = chooseLaneX(maxX, lanePadding, rect.width);
+      word.x = lane.x;
       word.y = -Math.max(54, rect.height + 12);
+      // Unavoidable horizontal overlap: lift the new word above the last spawn so
+      // rectangles never overlap at spawn (per-frame motion never alters x, and
+      // all words share one fallSpeed, so spawn-time separation is sufficient).
+      if (lane.gap < 0) {
+        const last = state.words[state.words.length - 1];
+        if (last && Math.abs(last.y - word.y) < rect.height + 8) {
+          word.y = Math.min(word.y, last.y - (rect.height + 8));
+        }
+      }
       word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
       state.words.push(word);
     }
 
-    function chooseLaneX(maxX, padding) {
-      if (!state.words.length) {
-        return Math.round(padding + Math.random() * (maxX - padding));
+    function chooseLaneX(maxX, padding, width) {
+      // Only words still near the spawn band can ever co-occupy the new word's row.
+      const nearTop = state.words.filter((w) => w.y < w.height * 3);
+      if (!nearTop.length) {
+        return { x: Math.round(padding + Math.random() * (maxX - padding)), gap: Infinity };
       }
 
       let bestX = padding;
-      let bestDistance = -1;
+      let bestGap = -Infinity;
       for (let i = 0; i < 8; i += 1) {
         const candidate = Math.round(padding + Math.random() * (maxX - padding));
-        const nearest = state.words.reduce((min, word) => Math.min(min, Math.abs(word.x - candidate)), Infinity);
-        if (nearest > bestDistance) {
-          bestDistance = nearest;
+        // True horizontal rectangle gap (negative = overlap), not left-edge distance.
+        const gap = nearTop.reduce((min, w) => Math.min(min,
+          Math.abs((candidate + width / 2) - (w.x + w.width / 2)) - (width + w.width) / 2), Infinity);
+        if (gap > bestGap) {
+          bestGap = gap;
           bestX = candidate;
         }
       }
-      return bestX;
+      return { x: bestX, gap: bestGap };
     }
 
     function renderWord(word) {
@@ -2792,11 +3409,32 @@
         return;
       }
 
-      const delta = Math.min(0.05, (timestamp - state.lastFrame) / 1000 || 0);
+      const rawDelta = (timestamp - state.lastFrame) / 1000 || 0;
       state.lastFrame = timestamp;
+      // Long stall (tab jank / background throttle): resync the beat grid
+      // instead of replaying missed beats (mirrors the triggered===4 resync).
+      // The music kept playing through the stall, so re-anchor to it when possible.
+      if (rawDelta > 0.25 && state.nextBeatAt) {
+        if (!syncBeatGridToMusic()) {
+          state.nextBeatAt = timestamp / 1000 + beatInterval();
+        }
+        state.clampDebt = 0;
+      }
+      const delta = Math.min(0.05, rawDelta);
+      // The 50ms clamp dilates fall motion on slow machines while beats run on
+      // wall clock — accumulate the clamped-away time and push the beat grid
+      // back once it exceeds a beat so word density can't exceed the intended spacing.
+      state.clampDebt += rawDelta - delta;
+      if (state.clampDebt >= beatInterval() && state.nextBeatAt) {
+        state.nextBeatAt += state.clampDebt;
+        state.clampDebt = 0;
+      }
       processBeats(timestamp / 1000);
-      const playHeight = els.playfield.clientHeight;
-      const lineY = playHeight - 70;
+      // clientHeight forces layout — read it once and refresh via the debounced
+      // resize handler instead of every frame.
+      if (!state.playHeight) state.playHeight = els.playfield.clientHeight;
+      const playHeight = state.playHeight;
+      const lineY = playHeight - state.lineBottom;
       const now = nowSeconds();
       const slow = now < state.slowUntil;
       if (!slow && els.shell.classList.contains("slowmo")) {
@@ -2805,7 +3443,15 @@
       if (state.feverActive && now >= state.feverUntil) {
         endFever();
       }
-      const fallSpeed = ((playHeight + 120) / state.config.fallSeconds) * (slow ? SLOWMO_FACTOR : 1);
+      // Normalize speed to the real spawn-to-line distance (words spawn ~58px above
+      // the field) so fallSeconds means "seconds until the drop line" at any viewport height.
+      const fallSpeed = ((playHeight - state.lineBottom + 58) / state.config.fallSeconds) * (slow ? SLOWMO_FACTOR : 1);
+
+      // Escalation bands in TIME, not pixels (~1.8s amber, ~0.7s red), clamped so
+      // beginner doesn't sit half-amber and the advanced cap keeps a visible warning.
+      const nearAt = lineY - Math.min(300, Math.max(90, fallSpeed * 1.8));
+      const perilAt = lineY - Math.min(150, Math.max(40, fallSpeed * 0.7));
+      let anyPeril = false;
 
       for (let i = state.words.length - 1; i >= 0; i -= 1) {
         const word = state.words[i];
@@ -2815,13 +3461,16 @@
         word.y += fallSpeed * delta;
         word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
 
+        // Collision uses the word's BOTTOM edge so it visually touches the line before dying.
+        const bottom = word.y + word.height;
         // Only touch the DOM when the proximity state actually changes (avoids per-frame recalc).
-        const near = word.y >= lineY - 150;
-        const peril = word.y >= lineY - 48;
+        const near = bottom >= nearAt;
+        const peril = bottom >= perilAt;
+        if (peril) anyPeril = true;
         if (near !== word._near) { word.el.classList.toggle("near", near); word._near = near; }
         if (peril !== word._peril) { word.el.classList.toggle("peril", peril); word._peril = peril; }
 
-        if (word.y >= lineY) {
+        if (bottom >= lineY) {
           missWord(word, i);
           if (state.status !== "playing") {
             break;
@@ -2829,10 +3478,29 @@
         }
       }
 
+      // Danger line heats up while anything is in the peril band (write on change only).
+      if (anyPeril !== state.lineHot) {
+        state.lineHot = anyPeril;
+        els.shell.classList.toggle("line-hot", anyPeril);
+      }
+
       state.beatGlow = Math.max(0, state.beatGlow - delta * 4.2);
       state.shakeTimer = Math.max(0, state.shakeTimer - delta);
-      els.shell.style.setProperty("--beat-glow", state.reducedMotion ? "0.16" : state.beatGlow.toFixed(3));
-      els.shell.style.setProperty("--shake-x", (!state.reducedMotion && state.shakeTimer > 0) ? (Math.sin(timestamp * 0.09) * 4).toFixed(1) + "px" : "0px");
+      // Custom-property writes on the shell trigger a subtree style recalc —
+      // only touch them when the rendered value actually changed (idle/reduced
+      // frames then write nothing at all).
+      const glowStr = state.reducedMotion ? "0.16" : state.beatGlow.toFixed(3);
+      if (glowStr !== lastGlowStr) {
+        lastGlowStr = glowStr;
+        els.shell.style.setProperty("--beat-glow", glowStr);
+      }
+      const shakeStr = (!state.reducedMotion && state.shakeTimer > 0)
+        ? (Math.sin(timestamp * 0.09) * 4).toFixed(1) + "px"
+        : "0px";
+      if (shakeStr !== lastShakeStr) {
+        lastShakeStr = shakeStr;
+        els.shell.style.setProperty("--shake-x", shakeStr);
+      }
 
       updateFeverMeter();
       if (timestamp - state.lastStatMs > 400) {
@@ -2840,35 +3508,54 @@
         updateLiveStats();
       }
 
-      state.rafId = requestAnimationFrame(loop);
+      // missWord can end the run mid-loop — don't schedule a stray extra frame.
+      if (state.status === "playing") {
+        state.rafId = requestAnimationFrame(loop);
+      } else {
+        state.rafId = null;
+      }
     }
 
     function missWord(word, index) {
       if (word.id === state.targetId) {
         state.targetId = null;
       }
+      const cx = word.x + word.width / 2;
+      spawnMissBurst(cx, word.y + word.height);
       word.el.remove();
       state.words.splice(index, 1);
-      registerStrike();
+      registerStrike(cx, word.y);
     }
 
-    function registerStrike() {
+    function registerStrike(x, y) {
       const now = nowSeconds();
+      state.combo = 0; // even forgiven misses break the streak
+      // Every miss gets a MISS label — it's the only word-level feedback that
+      // survives reduced motion (burst/flash/shake are all suppressed there).
+      if (typeof x === "number") {
+        spawnFloatingLabel(x, typeof y === "number" ? y : 0, "MISS", "#ff5364");
+      }
       if (now < state.nextStrikeAt) {
+        // Graced pileup miss: the life is forgiven, but acknowledge it —
+        // a soft miss tone, no full-screen strobe/shake.
+        playMiss(true);
+        updateHud();
         return;
       }
 
-      state.combo = 0;
       state.lives -= 1;
       state.shakeTimer = 0.32;
       state.nextStrikeAt = now + state.config.strikeGraceSeconds;
-      drainFever(FEVER_DRAIN_ON_MISS);
+      // A strike always costs ~3 clears of fever progress, whatever the mode.
+      drainFever(3 * state.config.feverGain);
       flashMiss();
       playMiss();
       updateHud();
       updateFeverMeter();
       if (state.lives <= 0) {
         endGame();
+      } else {
+        announce("Life lost — " + state.lives + " left");
       }
     }
 
@@ -2883,8 +3570,25 @@
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // Ignore IME composition keydowns (they can carry raw a-z with isComposing=true).
+      if (event.isComposing || event.keyCode === 229) {
+        return;
+      }
+      // Held keys must not machine-gun mistypes, SFX, or pause toggling.
+      if (event.repeat) {
+        return;
+      }
 
       const key = event.key;
+
+      // Focus trap: while any dialog is open, Tab never leaves it.
+      if (key === "Tab") {
+        const modal = openModalEl();
+        if (modal) {
+          trapTab(event, modal);
+          return;
+        }
+      }
 
       if (settingsOpen()) {
         if (key === "Escape" || key === "Enter") { event.preventDefault(); closeSettings(); }
@@ -2892,19 +3596,23 @@
       }
 
       if (key === "Escape") {
-        if (state.status === "countdown") backToStart();
+        if (state.status === "countdown") {
+          // First Esc holds the countdown on the pause dialog; resume restarts it.
+          if (state.countdownHeld) resumeGame();
+          else holdCountdown(true);
+        }
         else if (state.status === "playing") pauseGame();
         else if (state.status === "paused") resumeGame();
+        else if (state.status === "resuming") holdResume();
         return;
       }
 
       // Menu / results navigation by keyboard.
       if (state.status === "start") {
-        if (settingsOpen()) return;
         if (key === "1") startGame("beginner");
         else if (key === "2") startGame("intermediate");
         else if (key === "3") startGame("advanced");
-        else if (key === "Enter") startGame(state.modeKey);
+        else if (key === "Enter") { event.preventDefault(); startGame(state.modeKey); }
         return;
       }
       if (state.status === "gameover") {
@@ -2913,18 +3621,41 @@
         return;
       }
       if (state.status === "paused") {
-        if (key === "Enter") resumeGame();
+        if (key === "Enter") { event.preventDefault(); resumeGame(); }
+        else if (key.toLowerCase() === "m") backToStart();
+        return;
+      }
+      // Countdown held on the pause dialog: mirror the pause-screen keys.
+      if (state.status === "countdown" && state.countdownHeld) {
+        if (key === "Enter") { event.preventDefault(); resumeGame(); }
         else if (key.toLowerCase() === "m") backToStart();
         return;
       }
 
       if (state.status !== "playing") {
-        return; // ignore typing during the countdown
+        return; // ignore typing during the countdown / resume count
       }
 
       if (key === "Backspace") {
         event.preventDefault();
-        clearTarget();
+        // Step back one letter instead of wiping the word — absorbs the post-typo reflex.
+        const current = state.words.find((word) => word.id === state.targetId);
+        if (current && current.progress > 0) {
+          current.progress -= 1;
+          renderWord(current);
+        }
+        return;
+      }
+
+      if (key === "Tab") {
+        event.preventDefault();
+        releaseTarget();
+        return;
+      }
+
+      // Habitual Space/Enter must never re-activate a focused HUD button mid-run.
+      if (key === " " || key === "Enter") {
+        event.preventDefault();
         return;
       }
 
@@ -2938,7 +3669,8 @@
 
     function resetTransientFx() {
       endFever();
-      els.shell.classList.remove("slowmo", "level-pulse", "flash-miss");
+      els.shell.classList.remove("slowmo", "level-pulse", "flash-miss", "line-hot");
+      state.lineHot = false;
       state.fever = 0;
       state.feverActive = false;
       state.feverUntil = 0;
@@ -2956,7 +3688,9 @@
 
     function backToStart() {
       cancelCountdown();
+      state.countdownHeld = false;
       state.status = "start";
+      if (els.touchInput) els.touchInput.blur();
       stopBeatLoop();
       if (state.audio && state.audio.ctx.state === "suspended") {
         state.audio.ctx.resume();
@@ -2978,7 +3712,10 @@
 
     function focusFirst(screenEl) {
       if (!screenEl) return;
-      const target = screenEl.querySelector("button:not([disabled]), [tabindex]");
+      // Prefer tab-reachable controls so roving-tabindex radios land on the
+      // selected option, not the first sibling.
+      const target = screenEl.querySelector("button:not([disabled]):not([tabindex='-1']), [tabindex='0']")
+        || screenEl.querySelector("button:not([disabled]), [tabindex]");
       if (target) {
         try { target.focus(); } catch (error) {}
       }
@@ -2988,10 +3725,12 @@
       state.totalPresses += 1;
       let target = state.words.find((word) => word.id === state.targetId);
 
-      // Active-typing time: count gaps under 2s so idle waiting doesn't deflate WPM.
+      // Active-typing time: cap each inter-key gap at 600ms so idle waiting
+      // doesn't deflate WPM, while burst-opening keystrokes still cost a little
+      // (a totally free first keystroke per burst inflated short-word WPM ~25%).
       const nowMs = performance.now();
-      if (state.lastKeyMs && nowMs - state.lastKeyMs < 2000) {
-        state.activeMs += nowMs - state.lastKeyMs;
+      if (state.lastKeyMs) {
+        state.activeMs += Math.min(nowMs - state.lastKeyMs, 600);
       }
       state.lastKeyMs = nowMs;
 
@@ -3043,13 +3782,12 @@
       el.classList.add(cls);
     }
 
-    function clearTarget() {
+    function releaseTarget() {
+      // Release the lock but keep typed progress — pickTargetForLetter re-locks the
+      // highest-progress match on the next keystroke, so nothing is lost.
       const current = state.words.find((word) => word.id === state.targetId);
-      if (current) {
-        current.progress = 0;
-        state.targetId = null;
-        renderWord(current);
-      }
+      state.targetId = null;
+      if (current) renderWord(current);
     }
 
     function pulseWrong(word) {
@@ -3067,10 +3805,10 @@
       const index = state.words.findIndex((item) => item.id === word.id);
       if (index === -1) return;
 
-      const rect = word.el.getBoundingClientRect();
-      const playRect = els.playfield.getBoundingClientRect();
-      const x = rect.left - playRect.left + rect.width / 2;
-      const y = rect.top - playRect.top + rect.height / 2;
+      // Tracked state already holds the word's playfield-relative box — using
+      // it avoids two forced layouts (getBoundingClientRect) per cleared word.
+      const x = word.x + word.width / 2;
+      const y = word.y + word.height / 2;
       const nextCombo = state.combo + 1;
       const multiplier = comboMultiplierFor(nextCombo);
 
@@ -3109,7 +3847,7 @@
         if (onBeat) playPerfect();
       }
 
-      addFever(FEVER_GAIN);
+      addFever(state.config.feverGain);
       checkLevelUp();
       updateHud();
       updateLiveStats();
@@ -3137,29 +3875,34 @@
       return "Warm-up complete. Try one clean streak next run.";
     }
 
-    function spawnBurst(x, y, points) {
-      const colors = ["#34ecff", "#7a5cff", "#ff4d9a", "#c6ff4d", "#ffb347"];
+    function spawnBurst(x, y, points, particleCount) {
+      // Reduced motion: skip the ring/particles but keep the +points label so
+      // score feedback survives (the label renders as a static fade in reduced mode).
+      if (!state.reducedMotion) {
+        const colors = ["#34ecff", "#7a5cff", "#ff4d9a", "#c6ff4d", "#ffb347"];
 
-      const ring = document.createElement("span");
-      ring.className = "shockwave";
-      ring.style.left = x + "px";
-      ring.style.top = y + "px";
-      ring.style.setProperty("--shock-color", "var(--accent)");
-      els.playfield.appendChild(ring);
-      ring.addEventListener("animationend", () => ring.remove(), { once: true });
+        const ring = document.createElement("span");
+        ring.className = "shockwave";
+        ring.style.left = x + "px";
+        ring.style.top = y + "px";
+        ring.style.setProperty("--shock-color", "var(--accent)");
+        els.playfield.appendChild(ring);
+        ring.addEventListener("animationend", () => ring.remove(), { once: true });
 
-      for (let i = 0; i < 22; i += 1) {
-        const particle = document.createElement("span");
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 24 + Math.random() * 58;
-        particle.className = "particle";
-        particle.style.left = x + "px";
-        particle.style.top = y + "px";
-        particle.style.setProperty("--dx", Math.cos(angle) * distance);
-        particle.style.setProperty("--dy", Math.sin(angle) * distance);
-        particle.style.setProperty("--particle-color", colors[i % colors.length]);
-        els.playfield.appendChild(particle);
-        particle.addEventListener("animationend", () => particle.remove(), { once: true });
+        const count = particleCount || 22;
+        for (let i = 0; i < count; i += 1) {
+          const particle = document.createElement("span");
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 24 + Math.random() * 58;
+          particle.className = "particle";
+          particle.style.left = x + "px";
+          particle.style.top = y + "px";
+          particle.style.setProperty("--dx", Math.cos(angle) * distance);
+          particle.style.setProperty("--dy", Math.sin(angle) * distance);
+          particle.style.setProperty("--particle-color", colors[i % colors.length]);
+          els.playfield.appendChild(particle);
+          particle.addEventListener("animationend", () => particle.remove(), { once: true });
+        }
       }
 
       const float = document.createElement("span");
@@ -3169,6 +3912,34 @@
       float.style.top = y + "px";
       els.playfield.appendChild(float);
       float.addEventListener("animationend", () => float.remove(), { once: true });
+      // Reduced mode shows labels statically (animation: none) — animationend
+      // never fires there, so a timeout owns removal. remove() is idempotent.
+      window.setTimeout(() => float.remove(), 900);
+    }
+
+    function spawnMissBurst(x, y) {
+      if (state.reducedMotion) return;
+      const ring = document.createElement("span");
+      ring.className = "shockwave";
+      ring.style.left = x + "px";
+      ring.style.top = y + "px";
+      ring.style.setProperty("--shock-color", "var(--c-danger)");
+      els.playfield.appendChild(ring);
+      ring.addEventListener("animationend", () => ring.remove(), { once: true });
+
+      for (let i = 0; i < 12; i += 1) {
+        const particle = document.createElement("span");
+        const angle = -Math.random() * Math.PI; // scatter upward off the line
+        const distance = 20 + Math.random() * 46;
+        particle.className = "particle";
+        particle.style.left = x + "px";
+        particle.style.top = y + "px";
+        particle.style.setProperty("--dx", Math.cos(angle) * distance);
+        particle.style.setProperty("--dy", Math.sin(angle) * distance);
+        particle.style.setProperty("--particle-color", "var(--c-danger)");
+        els.playfield.appendChild(particle);
+        particle.addEventListener("animationend", () => particle.remove(), { once: true });
+      }
     }
 
     function spawnFloatingLabel(x, y, text, color) {
@@ -3180,6 +3951,8 @@
       label.style.color = color;
       els.playfield.appendChild(label);
       label.addEventListener("animationend", () => label.remove(), { once: true });
+      // Reduced-mode labels are static (no animationend) — timeout owns removal.
+      window.setTimeout(() => label.remove(), 900);
     }
 
     function toggleMute() {
@@ -3199,6 +3972,7 @@
         chip.dataset.song = song.id;
         chip.setAttribute("role", "radio");
         chip.setAttribute("aria-checked", song.id === state.trackKey ? "true" : "false");
+        chip.tabIndex = song.id === state.trackKey ? 0 : -1; // roving tabindex: one tab stop
         chip.style.setProperty("--song-accent", song.accent);
         chip.innerHTML =
           "<span class=\"song-eq\" aria-hidden=\"true\"><i></i><i></i><i></i></span>" +
@@ -3209,7 +3983,7 @@
       });
     }
 
-    function selectSong(id) {
+    function applySongSelection(id) {
       state.trackKey = id;
       writeStoredValue(STORAGE_KEYS.track, id);
       if (els.songPicker) {
@@ -3217,32 +3991,68 @@
           const on = c.dataset.song === id;
           c.classList.toggle("selected", on);
           c.setAttribute("aria-checked", on ? "true" : "false");
+          c.tabIndex = on ? 0 : -1;
         });
       }
-      previewSong(id);
     }
 
-    // Low-volume menu preview of the chosen song.
-    async function previewSong(id) {
+    function selectSong(id) {
+      const previousId = state.trackKey;
+      applySongSelection(id);
+      previewSong(id, previousId);
+    }
+
+    function clearPreviewTimer() {
+      if (state.previewTimer) {
+        window.clearTimeout(state.previewTimer);
+        state.previewTimer = null;
+      }
+    }
+
+    // Low-volume menu preview of the chosen song. Auto-fades after ~12s so a
+    // forgotten start screen doesn't loop forever.
+    async function previewSong(id, revertTo) {
       const audio = ensureAudio();
       if (!audio) return;
       if (audio.ctx.state === "suspended") audio.ctx.resume();
+      clearPreviewTimer();
       stopMusic(0.15);
       const song = songById(id);
-      if (!song.file || state.muted) return;
+      if (!song.file) return;
       const token = state.musicToken;
+      // Warm the decode cache even while muted so the run starts with the bed ready.
       const buffer = await loadMusicBuffer(id);
-      if (!buffer || token !== state.musicToken || state.status !== "start" || state.trackKey !== id) return;
+      if (token !== state.musicToken || state.trackKey !== id) return;
+      if (!buffer) {
+        toast("Couldn’t load “" + song.name + "” — try another track");
+        // Fall back to the previous working pick (no nested revert on failure).
+        if (revertTo && revertTo !== id) {
+          applySongSelection(revertTo);
+          previewSong(revertTo);
+        }
+        return;
+      }
+      if (state.muted || state.status !== "start") return;
       const src = audio.ctx.createBufferSource();
       src.buffer = buffer;
       src.loop = true;
-      src.connect(audio.music);
+      const srcGain = audio.ctx.createGain();
+      src.connect(srcGain);
+      srcGain.connect(audio.music);
       const now = audio.ctx.currentTime;
-      audio.music.gain.cancelScheduledValues(now);
-      audio.music.gain.setValueAtTime(0.0001, now);
-      audio.music.gain.exponentialRampToValueAtTime(Math.max(0.0001, musicLevel() * 0.55), now + 0.3);
-      src.start(now);
+      srcGain.gain.setValueAtTime(0.0001, now);
+      srcGain.gain.exponentialRampToValueAtTime(1, now + 0.3);
+      state.musicRole = "preview";
       state.musicSource = src;
+      state.musicGain = srcGain;
+      audio.music.gain.cancelScheduledValues(now);
+      audio.music.gain.setValueAtTime(Math.max(0.0001, audio.music.gain.value), now);
+      audio.music.gain.linearRampToValueAtTime(Math.max(0.0001, currentMusicLevel()), now + 0.15);
+      src.start(now);
+      state.previewTimer = window.setTimeout(() => {
+        state.previewTimer = null;
+        if (state.status === "start" && state.musicRole === "preview") stopMusic(1.2);
+      }, 12000);
     }
 
     // ---- Settings ----
@@ -3251,12 +4061,35 @@
     }
     function openSettings() {
       if (!els.settingsScreen) return;
+      state.settingsOpener = document.activeElement;
+      // Never let settings sit over live gameplay — words would keep falling and
+      // strikes accumulate behind the overlay. Pause first; closing the overlay
+      // then reveals the pause screen so the player resumes deliberately.
+      if (state.status === "playing") pauseGame();
+      else if (state.status === "countdown" && !state.countdownHeld) holdCountdown(true);
+      else if (state.status === "resuming") holdResume();
       syncSettingsUI();
       els.settingsScreen.classList.remove("hidden");
+      updateModalGuards();
       focusFirst(els.settingsScreen);
     }
     function closeSettings() {
-      if (els.settingsScreen) els.settingsScreen.classList.add("hidden");
+      if (!els.settingsScreen || els.settingsScreen.classList.contains("hidden")) return;
+      els.settingsScreen.classList.add("hidden");
+      updateModalGuards();
+      // Return keyboard focus to whatever opened the dialog (gear / pause button) —
+      // unless a modal now owns focus and the opener sits outside it (e.g. the HUD
+      // gear behind the pause dialog that openSettings just surfaced).
+      const opener = state.settingsOpener;
+      state.settingsOpener = null;
+      const modal = openModalEl();
+      if (modal && (!opener || !modal.contains(opener))) {
+        focusFirst(modal);
+      } else if (opener && document.contains(opener) && !opener.closest(".hidden")) {
+        try { opener.focus(); } catch (error) {}
+      } else {
+        focusFirst(modal);
+      }
     }
     function syncSettingsUI() {
       if (els.musicVol) els.musicVol.value = Math.round(state.settings.musicVol * 100);
@@ -3266,18 +4099,21 @@
     function wireSettings() {
       if (els.musicVol) els.musicVol.addEventListener("input", () => {
         state.settings.musicVol = clamp01(els.musicVol.value / 100, 1);
-        saveSettings(); applySettings();
+        scheduleSettingsSave(); applySettings();
       });
       if (els.sfxVol) els.sfxVol.addEventListener("input", () => {
         state.settings.sfxVol = clamp01(els.sfxVol.value / 100, 1);
-        saveSettings(); applySettings();
+        scheduleSettingsSave(); applySettings();
       });
       if (els.sfxVol) els.sfxVol.addEventListener("change", () => playClear(1));
       if (els.reducedToggle) els.reducedToggle.addEventListener("change", () => {
         state.settings.reducedMotion = els.reducedToggle.checked;
         saveSettings(); applySettings();
       });
-      if (els.settingsButton) els.settingsButton.addEventListener("click", openSettings);
+      if (els.settingsButton) els.settingsButton.addEventListener("click", () => {
+        openSettings();
+        els.settingsButton.blur(); // keep keyboard focus out of the HUD during play
+      });
       if (els.settingsClose) els.settingsClose.addEventListener("click", closeSettings);
       if (els.pauseSettings) els.pauseSettings.addEventListener("click", openSettings);
     }
@@ -3291,9 +4127,47 @@
       parts.push((p.lifetimeWords || 0).toLocaleString() + " words typed");
       if (state.highScore > 0) parts.push("best " + state.highScore.toLocaleString());
       els.startProfile.innerHTML = parts.map((t) => "<span class=\"stat-chip\">" + t + "</span>").join("");
+      renderModeBests();
     }
 
-    // ---- Touch / no-keyboard graceful message ----
+    // Difficulty radios: aria-checked + roving tabindex + .selected follow the
+    // remembered mode (Enter starts it; arrow keys move it; 1/2/3 start instantly).
+    function updateDifficultySelection() {
+      document.querySelectorAll(".difficulty-button").forEach((button) => {
+        const on = button.dataset.mode === state.modeKey;
+        button.classList.toggle("selected", on);
+        button.setAttribute("aria-checked", on ? "true" : "false");
+        button.tabIndex = on ? 0 : -1;
+      });
+    }
+
+    // Standard radio-group keyboard pattern: arrows move selection and focus together.
+    function wireRadioArrows(container, selector, onMove) {
+      if (!container) return;
+      container.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+        const items = Array.from(container.querySelectorAll(selector));
+        const current = items.indexOf(document.activeElement);
+        if (current === -1 || items.length < 2) return;
+        event.preventDefault();
+        const dir = (event.key === "ArrowRight" || event.key === "ArrowDown") ? 1 : -1;
+        const next = items[(current + dir + items.length) % items.length];
+        onMove(next);
+        try { next.focus(); } catch (error) {}
+      });
+    }
+
+    // Per-mode bests on the difficulty buttons — score chasing works on every mode.
+    function renderModeBests() {
+      document.querySelectorAll(".difficulty-button").forEach((button) => {
+        const span = button.querySelector(".mode-best");
+        if (!span) return;
+        const best = state.profile.best && state.profile.best[button.dataset.mode];
+        span.textContent = best && best.score > 0 ? "Best " + best.score.toLocaleString() : "";
+      });
+    }
+
+    // ---- Touch mode: soft-keyboard input + on-screen pause ----
     function detectInput() {
       const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
       const noHover = window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -3301,6 +4175,44 @@
         if (els.mobileBanner) els.mobileBanner.hidden = false;
         els.shell.classList.add("touch");
       }
+    }
+
+    // Focusing the hidden input summons the soft keyboard. Call inside tap
+    // gestures (start/resume) — mobile browsers refuse keyboard pops otherwise.
+    function focusTouchInput() {
+      if (!els.touchInput || !els.shell.classList.contains("touch")) return;
+      els.touchInput.value = "";
+      try { els.touchInput.focus({ preventScroll: true }); } catch (error) {}
+    }
+
+    function wireTouchInput() {
+      if (els.touchInput) {
+        // Soft keyboards often send keydown 229/"Unidentified" — letters arrive
+        // here instead. Hardware keydowns preventDefault before insertion, so
+        // a letter is never processed twice.
+        els.touchInput.addEventListener("input", (event) => {
+          const data = (event && event.data) || els.touchInput.value;
+          els.touchInput.value = "";
+          if (state.status !== "playing" || !data) return;
+          for (const ch of String(data)) {
+            if (/^[a-z]$/i.test(ch)) typeLetter(ch.toLowerCase());
+          }
+        });
+      }
+      if (els.touchPause) {
+        els.touchPause.addEventListener("click", () => {
+          // Mirror the Esc routing — the button is visible during the
+          // countdown and READY-GO too, not just live play.
+          if (state.status === "countdown" && !state.countdownHeld) holdCountdown(true);
+          else if (state.status === "resuming") holdResume();
+          else pauseGame();
+          els.touchPause.blur();
+        });
+      }
+      // Tapping the playfield mid-run re-summons a dismissed soft keyboard.
+      els.playfield.addEventListener("pointerdown", () => {
+        if (state.status === "playing") focusTouchInput();
+      });
     }
 
     // ---- Share results ----
@@ -3324,6 +4236,20 @@
       window.setTimeout(() => els.toast.classList.remove("show"), 1800);
     }
 
+    // Screen-reader announcements for discrete gameplay events (the playfield
+    // itself is aria-hidden — falling words would just be live-region spam).
+    let announceTimer = null;
+    function announce(msg) {
+      if (!els.srAnnounce) return;
+      // Clear first so a repeated identical message still re-announces.
+      els.srAnnounce.textContent = "";
+      if (announceTimer) window.clearTimeout(announceTimer);
+      announceTimer = window.setTimeout(() => {
+        announceTimer = null;
+        els.srAnnounce.textContent = msg;
+      }, 30);
+    }
+
     function byId(id) { return document.getElementById(id); }
     Object.assign(els, {
       countdown: byId("countdown"),
@@ -3340,7 +4266,10 @@
       streakStat: byId("streakStat"),
       share: byId("shareButton"),
       toast: byId("toast"),
-      mobileBanner: byId("mobileBanner")
+      mobileBanner: byId("mobileBanner"),
+      srAnnounce: byId("srAnnounce"),
+      touchInput: byId("touchInput"),
+      touchPause: byId("touchPauseButton")
     });
 
     document.querySelectorAll("[data-mode]").forEach((button) => {
@@ -3350,23 +4279,92 @@
     els.mode.addEventListener("click", backToStart);
     els.resume.addEventListener("click", resumeGame);
     els.pauseMode.addEventListener("click", backToStart);
-    els.mute.addEventListener("click", toggleMute);
+    // Blur after click so Space/Enter during play can't re-activate the button.
+    els.mute.addEventListener("click", () => { toggleMute(); els.mute.blur(); });
     if (els.share) els.share.addEventListener("click", shareResults);
     window.addEventListener("keydown", handleKeydown);
+
+    function readLineBottom() {
+      const raw = getComputedStyle(els.shell).getPropertyValue("--line-bottom");
+      const px = parseFloat(raw);
+      return Number.isFinite(px) ? px : 70;
+    }
+
+    // Words freeze x/width/height at spawn while the font is vw-sized — on resize,
+    // re-measure live words and re-clamp them into the new playfield width.
+    function handleResize() {
+      state.lineBottom = readLineBottom();
+      state.playHeight = els.playfield.clientHeight;
+      if (!state.words.length) return;
+      const fieldWidth = els.playfield.clientWidth;
+      state.words.forEach((word) => {
+        const rect = word.el.getBoundingClientRect();
+        if (rect.width) {
+          word.width = rect.width;
+          word.height = rect.height;
+        }
+        word.x = Math.min(word.x, Math.max(18, fieldWidth - word.width - 18));
+        word.el.style.transform = "translate3d(" + word.x + "px, " + word.y + "px, 0)";
+      });
+    }
+
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(handleResize, 150);
+    });
+    state.lineBottom = readLineBottom();
     // Auto-pause when the tab is hidden (correct API; won't fire on in-page focus moves).
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) return;
-      if (state.status === "countdown") backToStart();
-      else pauseGame();
+      if (document.hidden) {
+        if (state.status === "start") {
+          // Don't let a song preview loop forever in a hidden tab.
+          state.resumePreview = !!state.musicSource && state.musicRole === "preview";
+          if (state.resumePreview) stopMusic(0.2);
+        } else if (state.status === "countdown") {
+          // Hold the countdown instead of discarding the chosen run.
+          if (!state.countdownHeld) holdCountdown(false);
+          if (state.musicSource && state.musicRole === "preview") stopMusic(0.2);
+        } else if (state.status === "resuming") {
+          holdResume();
+        } else {
+          pauseGame();
+        }
+        return;
+      }
+      if (state.status === "start" && state.resumePreview) {
+        state.resumePreview = false;
+        previewSong(state.trackKey);
+      } else if (state.status === "countdown" && state.countdownHeld && els.pause.classList.contains("hidden")) {
+        // Held by the tab-hide above (not parked on the pause dialog by Esc):
+        // restart the 3-2-1 so the run survives a brief alt-tab.
+        state.countdownHeld = false;
+        startCountdown();
+      }
     });
+
+    // Warm the selected track's decode cache on the first user gesture (gesture
+    // also legitimizes AudioContext creation) so the bed is ready by "GO" —
+    // even for muted players or first-timers who never touch the song picker.
+    const warmMusicCache = () => { loadMusicBuffer(state.trackKey); };
+    window.addEventListener("pointerdown", warmMusicCache, { once: true });
+    window.addEventListener("keydown", warmMusicCache, { once: true });
 
     buildSongPicker();
     wireSettings();
+    wireTouchInput();
     renderStartProfile();
     detectInput();
     applySettings();
     updateMuteButton();
     updateHud();
+    updateDifficultySelection();
+    wireRadioArrows(document.querySelector(".difficulty-grid"), ".difficulty-button", (button) => {
+      state.modeKey = button.dataset.mode;
+      updateDifficultySelection();
+    });
+    wireRadioArrows(els.songPicker, ".song-chip", (chip) => selectSong(chip.dataset.song));
+    updateModalGuards();
     focusFirst(els.start);
   </script>
 </body>
