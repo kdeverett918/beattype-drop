@@ -2316,15 +2316,14 @@
         clockTimer: null,
         words: [],
         wordIndex: 0,
-        input: [],            // {char, correct, extra} for the current word
+        input: [],            // {correct, extra} per typed char of the current word
         committedCorrect: 0,  // correct chars (+ space credit) from finished words
         typedChars: 0,        // raw chars entered (letters + spaces), monotonic
         correctPresses: 0,    // monotonic
         totalPresses: 0,      // monotonic
         wordNodes: [],
         curNode: null,
-        extraEls: [],
-        scroll: 0
+        extraEls: []
       };
     }
 
@@ -4600,7 +4599,13 @@
 
     function leaveTest(msg) {
       stopTestClock();
-      if (state.test) state.test.running = false;
+      // Drop the run's word nodes (~600 spans) instead of parking them in the
+      // hidden screen for the rest of the session; the caret survives the wipe.
+      state.test = freshTestState();
+      if (els.testStreamInner) {
+        els.testStreamInner.textContent = "";
+        if (els.testCaret) els.testStreamInner.appendChild(els.testCaret);
+      }
       state.status = "start";
       if (els.touchInput) els.touchInput.blur();
       setScreen("start");
@@ -4699,7 +4704,7 @@
       if (i < word.length) {
         const correct = ch === word.charAt(i);
         if (correct) t.correctPresses += 1;
-        t.input.push({ char: ch, correct: correct, extra: false });
+        t.input.push({ correct: correct, extra: false });
         if (t.curNode && t.curNode.letters[i]) {
           t.curNode.letters[i].className = "test-letter " + (correct ? "ok" : "bad");
         }
@@ -4709,7 +4714,7 @@
         span.textContent = ch;
         if (t.curNode) t.curNode.el.appendChild(span);
         t.extraEls.push(span);
-        t.input.push({ char: ch, correct: false, extra: true });
+        t.input.push({ correct: false, extra: true });
       }
       positionTestCaret();
     }
@@ -4825,7 +4830,6 @@
       const lineH = t.curNode.el.offsetHeight || 0;
       // Keep the active word on the 2nd of three visible lines once past the first.
       const scroll = Math.max(0, t.curNode.el.offsetTop - lineH);
-      t.scroll = scroll;
       els.testStreamInner.style.transform = "translateY(" + (-scroll) + "px)";
     }
 
@@ -4842,7 +4846,7 @@
       const durSec = Math.round((t.durationMs || 60000) / 1000);
       const prior = state.profile.tests || [];
       // PB is per-duration — a 30s sprint never beats (or hides behind) a 60s score.
-      const prevBest = prior.reduce((m, e) => (Number(e.dur) || 60) === durSec ? Math.max(m, e.wpm || 0) : m, 0);
+      const prevBest = testsForDuration(durSec).reduce((m, e) => Math.max(m, e.wpm || 0), 0);
       const isPB = wpm > 0 && wpm > prevBest;
       if (wpm > 0) {
         state.profile.tests = prior
@@ -4860,8 +4864,7 @@
     }
 
     function renderTestResults(wpm, raw, acc, isPB, durSec) {
-      const resultsTitle = byId("testResultsTitle");
-      if (resultsTitle) resultsTitle.textContent = "Your Result · " + durSec + "s";
+      if (els.testResultsTitle) els.testResultsTitle.textContent = "Your Result · " + durSec + "s";
       if (els.testWpm) els.testWpm.textContent = wpm;
       if (els.testRaw) els.testRaw.textContent = raw;
       if (els.testAcc) els.testAcc.textContent = acc + "%";
@@ -5011,6 +5014,16 @@
       els.playfield.addEventListener("pointerdown", () => {
         if (state.status === "playing") focusTouchInput();
       });
+      // Same recovery during a Speed Check — the test screen covers the playfield,
+      // so it needs its own tap target (skip the buttons; they keep their clicks).
+      if (els.testScreen) {
+        els.testScreen.addEventListener("pointerdown", (event) => {
+          if (state.status !== "test" || !els.shell.classList.contains("touch")) return;
+          if (event.target && event.target.closest && event.target.closest("button")) return;
+          focusTouchInput();
+          resetTouchSentinel();
+        });
+      }
     }
 
     // ---- Share results ----
@@ -5071,6 +5084,7 @@
       speedCheck: byId("speedCheckButton"),
       testScreen: byId("testScreen"),
       testResults: byId("testResultsScreen"),
+      testResultsTitle: byId("testResultsTitle"),
       testTitle: byId("testTitle"),
       testTimer: byId("testTimer"),
       testLiveWpm: byId("testLiveWpm"),
