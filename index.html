@@ -2495,18 +2495,19 @@
         // sweep never interleaves layout reads with the removals below.
         // Cap per-word particles on big sweeps to bound the one-frame DOM churn.
         const perWord = state.words.length > 5 ? 8 : undefined;
+        // Swept words pay half a typed clear each (combo + fever scaled) and
+        // bank half fever credit, so the sweep is an escape hatch, not a score trap.
+        let perWordPts = Math.round(state.config.basePoints * 0.5 * comboMultiplier());
+        if (state.feverActive) perWordPts *= FEVER_MULTIPLIER;
         for (let i = state.words.length - 1; i >= 0; i -= 1) {
           const w = state.words[i];
-          spawnBurst(w.x + w.width / 2, w.y + w.height / 2, 40, perWord);
+          spawnBurst(w.x + w.width / 2, w.y + w.height / 2, perWordPts, perWord);
           w.el.remove();
           state.words.splice(i, 1);
           swept += 1;
         }
         state.targetId = null;
-        // Swept words pay half a typed clear each (combo + fever scaled) and
-        // bank half fever credit, so the sweep is an escape hatch, not a score trap.
-        let pts = swept * Math.round(state.config.basePoints * 0.5 * comboMultiplier());
-        if (state.feverActive) pts *= FEVER_MULTIPLIER;
+        const pts = swept * perWordPts;
         state.score += pts;
         addFever(state.config.feverGain * 0.5 * swept);
         spawnFloatingLabel(x, y - 30, def.label + (pts ? " +" + pts : ""), def.color);
@@ -4076,13 +4077,18 @@
       if (!els.settingsScreen || els.settingsScreen.classList.contains("hidden")) return;
       els.settingsScreen.classList.add("hidden");
       updateModalGuards();
-      // Return keyboard focus to whatever opened the dialog (gear / pause button).
+      // Return keyboard focus to whatever opened the dialog (gear / pause button) —
+      // unless a modal now owns focus and the opener sits outside it (e.g. the HUD
+      // gear behind the pause dialog that openSettings just surfaced).
       const opener = state.settingsOpener;
       state.settingsOpener = null;
-      if (opener && document.contains(opener) && !opener.closest(".hidden")) {
+      const modal = openModalEl();
+      if (modal && (!opener || !modal.contains(opener))) {
+        focusFirst(modal);
+      } else if (opener && document.contains(opener) && !opener.closest(".hidden")) {
         try { opener.focus(); } catch (error) {}
       } else {
-        focusFirst(openModalEl());
+        focusFirst(modal);
       }
     }
     function syncSettingsUI() {
@@ -4195,7 +4201,11 @@
       }
       if (els.touchPause) {
         els.touchPause.addEventListener("click", () => {
-          pauseGame();
+          // Mirror the Esc routing — the button is visible during the
+          // countdown and READY-GO too, not just live play.
+          if (state.status === "countdown" && !state.countdownHeld) holdCountdown(true);
+          else if (state.status === "resuming") holdResume();
+          else pauseGame();
           els.touchPause.blur();
         });
       }
