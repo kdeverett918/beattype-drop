@@ -1440,6 +1440,36 @@
       margin: 8px 0 10px;
     }
 
+    .test-dur-row {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0 4px;
+    }
+    .test-dur-button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 16px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+    }
+    .test-dur-button:hover,
+    .test-dur-button:focus-visible {
+      border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+      color: var(--ink);
+      outline: none;
+    }
+    .test-dur-button.selected {
+      border-color: color-mix(in srgb, var(--accent) 78%, transparent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--ink);
+      box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+
     .test-hud {
       display: flex;
       gap: 14px;
@@ -1889,7 +1919,7 @@
         <div class="song-picker" id="songPicker" role="radiogroup" aria-label="Choose soundtrack"></div>
         <div class="speed-check-row">
           <button class="speed-check-button" type="button" id="speedCheckButton">
-            ⏱ Speed Check <span class="sc-sub">— 60-second typing test</span>
+            ⏱ Speed Check <span class="sc-sub">— 30/60-second typing test</span>
           </button>
         </div>
         <div class="quick-help" aria-label="How to play">
@@ -1970,6 +2000,10 @@
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="testTitle" tabindex="-1">
         <div class="eyebrow">Speed Check</div>
         <h1 id="testTitle">60-Second Test</h1>
+        <div class="test-dur-row" role="radiogroup" aria-label="Test length">
+          <button class="test-dur-button" type="button" role="radio" aria-checked="false" data-dur="30">30s</button>
+          <button class="test-dur-button" type="button" role="radio" aria-checked="true" data-dur="60">60s</button>
+        </div>
         <div class="test-hud">
           <div class="test-hud-block"><span>Time</span><strong id="testTimer">60</strong></div>
           <div class="test-hud-block"><span>WPM</span><strong id="testLiveWpm">0</strong></div>
@@ -2183,7 +2217,8 @@
       muted: "beatTypeDropMuted",
       track: "beatTypeDropTrack",
       profile: "beatTypeDropProfile",
-      settings: "beatTypeDropSettings"
+      settings: "beatTypeDropSettings",
+      testDur: "beatTypeDropTestDur"
     };
 
     // Selectable music — decoupled from difficulty. Files live in /audio.
@@ -2277,6 +2312,7 @@
       return {
         running: false,
         startMs: 0,
+        durationMs: 60000,
         clockTimer: null,
         words: [],
         wordIndex: 0,
@@ -2358,7 +2394,8 @@
                   d: e && typeof e.d === "string" ? e.d : "",
                   wpm: Number(e && e.wpm) || 0,
                   raw: Number(e && e.raw) || 0,
-                  acc: Number(e && e.acc) || 0
+                  acc: Number(e && e.acc) || 0,
+                  dur: Number(e && e.dur) || 60 // pre-duration entries were all 60s
                 }))
                 .filter((e) => e.wpm > 0)
                 .slice(-50)
@@ -4501,6 +4538,33 @@
     // All counters live in state.test; the test never touches gameplay state, the
     // RAF loop, or the beat loop.
     const TEST_SENTINEL = " ";
+    const TEST_DURATIONS = [30, 60];
+    let testDurationSec = (function () {
+      const v = Number(readStoredValue(STORAGE_KEYS.testDur, "60"));
+      return TEST_DURATIONS.indexOf(v) !== -1 ? v : 60;
+    })();
+
+    // 30s and 60s scores live in the same history but never mix: PB, chart, and
+    // recent list are all filtered by duration (a 30s sprint WPM runs hotter
+    // than a 60s average, so cross-comparing would corrupt the trend).
+    function setTestDuration(sec) {
+      if (TEST_DURATIONS.indexOf(sec) === -1) return;
+      const changed = sec !== testDurationSec;
+      testDurationSec = sec;
+      writeStoredValue(STORAGE_KEYS.testDur, String(sec));
+      updateTestDurButtons();
+      // The toggle lives on the test screen — switching length restarts the run
+      // (zero stakes; a half-typed 60s run scored as 30s would be garbage).
+      if (state.status === "test" && (changed || state.test.startMs)) enterTest();
+    }
+
+    function updateTestDurButtons() {
+      document.querySelectorAll(".test-dur-button").forEach((b) => {
+        const on = Number(b.dataset.dur) === testDurationSec;
+        b.classList.toggle("selected", on);
+        b.setAttribute("aria-checked", on ? "true" : "false");
+      });
+    }
 
     function enterTest() {
       cancelCountdown();
@@ -4513,6 +4577,7 @@
       state.status = "test";
       state.test = freshTestState();
       state.test.running = true;
+      state.test.durationMs = testDurationSec * 1000;
       state.test.words = buildTestWords(100);
       renderTestStream();
       advanceTestWord();
@@ -4530,7 +4595,7 @@
       } else if (document.activeElement && document.activeElement !== document.body) {
         try { document.activeElement.blur(); } catch (error) {}
       }
-      announce("Speed check ready. Start typing to begin.");
+      announce(testDurationSec + "-second speed check ready. Start typing to begin.");
     }
 
     function leaveTest(msg) {
@@ -4545,9 +4610,11 @@
     }
 
     function resetTestHud() {
-      if (els.testTimer) els.testTimer.textContent = "60";
+      if (els.testTitle) els.testTitle.textContent = testDurationSec + "-Second Test";
+      if (els.testTimer) els.testTimer.textContent = String(testDurationSec);
       if (els.testLiveWpm) els.testLiveWpm.textContent = "0";
       if (els.testStreamInner) els.testStreamInner.style.transform = "translateY(0px)";
+      updateTestDurButtons();
     }
 
     // Common words, lengths 3-8, reshuffled and concatenated to the requested
@@ -4723,9 +4790,10 @@
     function tickTestClock() {
       const t = state.test;
       if (!t.running || !t.startMs) return;
+      const dur = t.durationMs || 60000;
       const elapsed = performance.now() - t.startMs;
-      if (elapsed >= 60000) { finishTest(); return; }
-      if (els.testTimer) els.testTimer.textContent = Math.max(0, Math.ceil((60000 - elapsed) / 1000));
+      if (elapsed >= dur) { finishTest(); return; }
+      if (els.testTimer) els.testTimer.textContent = Math.max(0, Math.ceil((dur - elapsed) / 1000));
       if (els.testLiveWpm) els.testLiveWpm.textContent = liveTestWpm();
     }
 
@@ -4771,17 +4839,19 @@
       const wpm = Math.max(0, Math.round((liveTestCorrect() / 5) / minutes));
       const raw = Math.max(0, Math.round((t.typedChars / 5) / minutes));
       const acc = t.totalPresses > 0 ? Math.round((t.correctPresses / t.totalPresses) * 100) : 100;
+      const durSec = Math.round((t.durationMs || 60000) / 1000);
       const prior = state.profile.tests || [];
-      const prevBest = prior.reduce((m, e) => Math.max(m, e.wpm || 0), 0);
+      // PB is per-duration — a 30s sprint never beats (or hides behind) a 60s score.
+      const prevBest = prior.reduce((m, e) => (Number(e.dur) || 60) === durSec ? Math.max(m, e.wpm || 0) : m, 0);
       const isPB = wpm > 0 && wpm > prevBest;
       if (wpm > 0) {
         state.profile.tests = prior
-          .concat({ d: new Date().toISOString(), wpm: wpm, raw: raw, acc: acc })
+          .concat({ d: new Date().toISOString(), wpm: wpm, raw: raw, acc: acc, dur: durSec })
           .slice(-50);
         saveProfile();
       }
       state.status = "testover";
-      renderTestResults(wpm, raw, acc, isPB);
+      renderTestResults(wpm, raw, acc, isPB, durSec);
       setScreen("testover");
       focusFirst(els.testResults);
       playLevelUp();
@@ -4789,23 +4859,29 @@
         " percent accuracy." + (isPB ? " New personal best!" : ""));
     }
 
-    function renderTestResults(wpm, raw, acc, isPB) {
+    function renderTestResults(wpm, raw, acc, isPB, durSec) {
+      const resultsTitle = byId("testResultsTitle");
+      if (resultsTitle) resultsTitle.textContent = "Your Result · " + durSec + "s";
       if (els.testWpm) els.testWpm.textContent = wpm;
       if (els.testRaw) els.testRaw.textContent = raw;
       if (els.testAcc) els.testAcc.textContent = acc + "%";
       if (els.testPbBadge) els.testPbBadge.hidden = !isPB;
       const modal = els.testResults && els.testResults.querySelector(".modal");
       if (modal) modal.classList.toggle("new-high", !!isPB);
-      buildTestChart();
-      renderTestRecent();
+      buildTestChart(durSec);
+      renderTestRecent(durSec);
+    }
+
+    function testsForDuration(durSec) {
+      return (state.profile.tests || []).filter((e) => (Number(e.dur) || 60) === durSec);
     }
 
     // Inline SVG sparkline of the last 20 WPM scores; PB circled in lime, latest
     // in the accent. aria-hidden — the summary line + recent list carry the data.
-    function buildTestChart() {
+    function buildTestChart(durSec) {
       const svg = els.testChart;
       if (!svg) return;
-      const tests = state.profile.tests || [];
+      const tests = testsForDuration(durSec);
       const pts = tests.slice(-20);
       if (!pts.length) {
         svg.innerHTML = "";
@@ -4836,16 +4912,17 @@
       if (latestIdx !== pbIdx) content += dot(latestIdx, "var(--accent)", 2);
       svg.innerHTML = content;
       if (els.testChartSummary) {
-        els.testChartSummary.textContent = "Best " + maxW + " WPM · " + tests.length +
-          " test" + (tests.length === 1 ? "" : "s");
+        const best = tests.reduce((m, e) => Math.max(m, e.wpm), 0);
+        els.testChartSummary.textContent = "Best " + best + " WPM · " + tests.length +
+          " test" + (tests.length === 1 ? "" : "s") + " · " + durSec + "s";
       }
     }
 
-    function renderTestRecent() {
+    function renderTestRecent(durSec) {
       if (!els.testRecent) return;
-      const tests = (state.profile.tests || []).slice(-5).reverse();
+      const tests = testsForDuration(durSec).slice(-5).reverse();
       if (!tests.length) {
-        els.testRecent.innerHTML = '<li class="test-recent-empty">First run — no history yet.</li>';
+        els.testRecent.innerHTML = '<li class="test-recent-empty">First ' + durSec + 's run — no history yet.</li>';
         return;
       }
       els.testRecent.innerHTML = tests.map((e) => {
@@ -4994,6 +5071,7 @@
       speedCheck: byId("speedCheckButton"),
       testScreen: byId("testScreen"),
       testResults: byId("testResultsScreen"),
+      testTitle: byId("testTitle"),
       testTimer: byId("testTimer"),
       testLiveWpm: byId("testLiveWpm"),
       testStream: byId("testStream"),
@@ -5024,6 +5102,13 @@
     if (els.testExit) els.testExit.addEventListener("click", () => leaveTest());
     if (els.testRetake) els.testRetake.addEventListener("click", () => { enterTest(); });
     if (els.testMenu) els.testMenu.addEventListener("click", () => leaveTest());
+    document.querySelectorAll(".test-dur-button").forEach((button) => {
+      button.addEventListener("click", () => setTestDuration(Number(button.dataset.dur)));
+    });
+    wireRadioArrows(document.querySelector(".test-dur-row"), ".test-dur-button", (button) => {
+      setTestDuration(Number(button.dataset.dur));
+    });
+    updateTestDurButtons();
     // Blur after click so Space/Enter during play can't re-activate the button.
     els.mute.addEventListener("click", () => { toggleMute(); els.mute.blur(); });
     if (els.share) els.share.addEventListener("click", shareResults);
