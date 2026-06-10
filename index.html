@@ -1396,6 +1396,193 @@
     .touch-pause { display: none; }
     .game-shell.touch.play-active .touch-pause { display: grid; }
 
+    /* ---- Speed Check (optional 60-second WPM typing test) ---- */
+    .speed-check-row { margin-top: 18px; }
+    .speed-check-button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 54px;
+      padding: 14px 20px;
+      border: 1px solid color-mix(in srgb, var(--c-lime) 42%, transparent);
+      border-radius: var(--r-md);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--c-lime) 12%, transparent), rgba(255, 255, 255, 0) 60%),
+        rgba(255, 255, 255, 0.03);
+      color: var(--ink);
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 160ms var(--spring), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+    }
+    .speed-check-button:hover,
+    .speed-check-button:focus-visible {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--c-lime) 78%, transparent);
+      box-shadow: 0 0 26px color-mix(in srgb, var(--c-lime) 20%, transparent);
+      outline: none;
+    }
+    .speed-check-button .sc-sub {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    #testScreen h1,
+    #testResultsScreen h1 {
+      font-size: clamp(30px, 6vw, 50px);
+      margin: 8px 0 10px;
+    }
+
+    .test-hud {
+      display: flex;
+      gap: 14px;
+      margin: 8px 0 12px;
+    }
+    .test-hud-block {
+      flex: 1;
+      border: 1px solid var(--edge);
+      border-radius: var(--r-md);
+      padding: 12px 16px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 50%),
+        rgba(255, 255, 255, 0.03);
+    }
+    .test-hud-block span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .test-hud-block strong {
+      display: block;
+      margin-top: 2px;
+      font-family: "JetBrains Mono", monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(26px, 5vw, 40px);
+      font-weight: 800;
+      line-height: 1;
+    }
+    .test-hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .test-hint kbd {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .test-stream {
+      position: relative;
+      height: 5.7em;
+      margin: 0 0 18px;
+      padding: 6px 4px;
+      overflow: hidden;
+      font-family: "JetBrains Mono", monospace;
+      font-size: clamp(20px, 3vw, 28px);
+      line-height: 1.9;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      -webkit-mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+      mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+    }
+    .test-stream-inner {
+      position: relative;
+      transition: transform 160ms var(--ease);
+      will-change: transform;
+    }
+    .test-word {
+      display: inline-block;
+      margin-right: 0.55em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .test-word.active { color: var(--ink); }
+    .test-letter {
+      color: inherit;
+      transition: color 80ms linear;
+    }
+    .test-letter.ok { color: var(--ink); }
+    .test-letter.bad { color: var(--c-danger); }
+    .test-letter.extra {
+      color: color-mix(in srgb, var(--c-danger) 80%, var(--ink));
+      opacity: 0.85;
+      text-decoration: underline;
+    }
+    .test-caret {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2px;
+      height: 1.3em;
+      background: var(--accent);
+      border-radius: 2px;
+      box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+      transition: transform 90ms var(--ease);
+      animation: testCaretBlink 1s steps(1) infinite;
+      pointer-events: none;
+    }
+    @keyframes testCaretBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.15; }
+    }
+
+    .test-trend { margin: 4px 0 20px; }
+    .test-chart {
+      display: block;
+      width: 100%;
+      aspect-ratio: 5 / 2;
+      max-height: 120px;
+      overflow: visible;
+    }
+    .test-chart-summary {
+      margin: 10px 0 6px;
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+    .test-recent {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 4px;
+    }
+    .test-recent li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-sm);
+      background: rgba(255, 255, 255, 0.03);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+    }
+    .test-recent .trc-wpm { color: var(--ink); font-weight: 700; }
+    .test-recent .trc-meta { color: var(--muted); }
+    .test-recent-empty { justify-content: center !important; color: var(--muted); }
+
+    .modal.new-high .pb-block {
+      border-color: color-mix(in srgb, var(--c-lime) 60%, transparent);
+      box-shadow: 0 0 28px color-mix(in srgb, var(--c-lime) 22%, transparent);
+    }
+    .modal.new-high .pb-block strong {
+      color: var(--c-lime);
+      text-shadow: 0 0 16px color-mix(in srgb, var(--c-lime) 55%, transparent);
+    }
+
     /* ---- Forced reduced motion via Settings toggle ---- */
     .game-shell.reduced *,
     .game-shell.reduced *::before,
@@ -1409,7 +1596,14 @@
     .game-shell.reduced .fever-meter.full > i,
     .game-shell.reduced .fever-meter.full::after,
     .game-shell.reduced .word.near.peril .word-inner,
-    .game-shell.reduced .song-chip .song-eq i { animation: none !important; }
+    .game-shell.reduced .song-chip .song-eq i,
+    .game-shell.reduced .test-caret { animation: none !important; }
+
+    /* The blanket .reduced rule kills animations but not transitions — be explicit
+       so the caret stays solid and the word stream snaps instead of sliding. */
+    .game-shell.reduced .test-caret { opacity: 1; }
+    .game-shell.reduced .test-stream-inner,
+    .game-shell.reduced .test-caret { transition: none !important; }
 
     /* Reduced motion must not delete information: the countdown digits and
        floating feedback labels (PERFECT!, +points, MISS, FEVER!, LEVEL N)
@@ -1581,6 +1775,16 @@
         opacity: 1;
         transform: translate(-50%, -10px);
       }
+
+      .test-caret {
+        animation: none !important;
+        opacity: 1;
+        transition: none;
+      }
+
+      .test-stream-inner {
+        transition: none;
+      }
     }
   </style>
 </head>
@@ -1683,9 +1887,15 @@
         </div>
         <div class="picker-label">Soundtrack <span>— pick your vibe</span></div>
         <div class="song-picker" id="songPicker" role="radiogroup" aria-label="Choose soundtrack"></div>
+        <div class="speed-check-row">
+          <button class="speed-check-button" type="button" id="speedCheckButton">
+            ⏱ Speed Check <span class="sc-sub">— 60-second typing test</span>
+          </button>
+        </div>
         <div class="quick-help" aria-label="How to play">
           <span class="pill">Just type — it locks the lowest match</span>
           <span class="pill"><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> start instantly &middot; <kbd>Enter</kbd> starts selected</span>
+          <span class="pill"><kbd>T</kbd> speed check</span>
           <span class="pill"><kbd>Esc</kbd> pause</span>
         </div>
         <div class="legend" aria-label="Power-ups">
@@ -1753,6 +1963,60 @@
           <button class="action-button" type="button" id="pauseModeButton">Change Mode</button>
         </div>
         <p class="kbd-hint"><kbd>Esc</kbd> or <kbd>Enter</kbd> resume &middot; <kbd>M</kbd> change mode</p>
+      </div>
+    </section>
+
+    <section class="screen hidden" id="testScreen">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="testTitle" tabindex="-1">
+        <div class="eyebrow">Speed Check</div>
+        <h1 id="testTitle">60-Second Test</h1>
+        <div class="test-hud">
+          <div class="test-hud-block"><span>Time</span><strong id="testTimer">60</strong></div>
+          <div class="test-hud-block"><span>WPM</span><strong id="testLiveWpm">0</strong></div>
+        </div>
+        <p class="test-hint">Start typing to begin — <kbd>Esc</kbd> exits</p>
+        <div class="test-stream" id="testStream" aria-hidden="true">
+          <div class="test-stream-inner" id="testStreamInner">
+            <span class="test-caret" id="testCaret"></span>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="action-button primary" type="button" id="testRestart">Restart</button>
+          <button class="action-button" type="button" id="testExit">Exit</button>
+        </div>
+        <p class="kbd-hint"><kbd>Esc</kbd> exit &middot; just type to begin</p>
+      </div>
+    </section>
+
+    <section class="screen hidden" id="testResultsScreen">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="testResultsTitle">
+        <div class="eyebrow">Speed Check</div>
+        <h1 id="testResultsTitle">Your Result</h1>
+        <div class="run-badge" id="testPbBadge" hidden>★ New personal best</div>
+        <div class="game-over-stats">
+          <div class="stat-block pb-block">
+            <span>WPM</span>
+            <strong id="testWpm">0</strong>
+          </div>
+          <div class="stat-block">
+            <span>Raw WPM</span>
+            <strong id="testRaw">0</strong>
+          </div>
+          <div class="stat-block">
+            <span>Accuracy</span>
+            <strong id="testAcc">100%</strong>
+          </div>
+        </div>
+        <div class="test-trend">
+          <svg class="test-chart" id="testChart" viewBox="0 0 100 40" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+          <p class="test-chart-summary" id="testChartSummary"></p>
+          <ul class="test-recent" id="testRecent" aria-label="Recent results"></ul>
+        </div>
+        <div class="action-row">
+          <button class="action-button primary" type="button" id="testRetake">Retake</button>
+          <button class="action-button" type="button" id="testMenu">Menu</button>
+        </div>
+        <p class="kbd-hint"><kbd>Enter</kbd> retake &middot; <kbd>M</kbd> menu</p>
       </div>
     </section>
 
@@ -2003,8 +2267,30 @@
       countdownHeld: false,
       settingsOpener: null,
       settings: loadSettings(),
-      profile: loadProfile()
+      profile: loadProfile(),
+      test: freshTestState()
     };
+
+    // Self-contained Speed Check counters — kept off the gameplay state so a test
+    // run can never bleed into the game's correctChars / activeMs / keyStats.
+    function freshTestState() {
+      return {
+        running: false,
+        startMs: 0,
+        clockTimer: null,
+        words: [],
+        wordIndex: 0,
+        input: [],            // {char, correct, extra} for the current word
+        committedCorrect: 0,  // correct chars (+ space credit) from finished words
+        typedChars: 0,        // raw chars entered (letters + spaces), monotonic
+        correctPresses: 0,    // monotonic
+        totalPresses: 0,      // monotonic
+        wordNodes: [],
+        curNode: null,
+        extraEls: [],
+        scroll: 0
+      };
+    }
 
     function loadSettings() {
       const fallback = { musicVol: 1, sfxVol: 1, reducedMotion: false };
@@ -2042,7 +2328,7 @@
     }
 
     function loadProfile() {
-      const base = { streak: 0, lastPlayed: "", lifetimeWords: 0, runs: 0, best: {}, keys: {} };
+      const base = { streak: 0, lastPlayed: "", lifetimeWords: 0, runs: 0, best: {}, keys: {}, tests: [] };
       try {
         const raw = JSON.parse(readStoredValue(STORAGE_KEYS.profile, "null"));
         if (raw && typeof raw === "object") {
@@ -2065,13 +2351,26 @@
             const r = rawKeys[k] || {};
             keys[k] = { hit: Number(r.hit) || 0, miss: Number(r.miss) || 0 };
           }
+          // Speed Check history: coerce, drop junk (wpm<=0), cap at the last 50.
+          const tests = Array.isArray(raw.tests)
+            ? raw.tests
+                .map((e) => ({
+                  d: e && typeof e.d === "string" ? e.d : "",
+                  wpm: Number(e && e.wpm) || 0,
+                  raw: Number(e && e.raw) || 0,
+                  acc: Number(e && e.acc) || 0
+                }))
+                .filter((e) => e.wpm > 0)
+                .slice(-50)
+            : [];
           return {
             streak: Number(raw.streak) || 0,
             lastPlayed: typeof raw.lastPlayed === "string" ? raw.lastPlayed : "",
             lifetimeWords: Number(raw.lifetimeWords) || 0,
             runs: Number(raw.runs) || 0,
             best,
-            keys
+            keys,
+            tests
           };
         }
       } catch (error) {}
@@ -2200,6 +2499,8 @@
       els.start.classList.toggle("hidden", which !== "start");
       els.over.classList.toggle("hidden", which !== "over");
       els.pause.classList.toggle("hidden", which !== "pause");
+      if (els.testScreen) els.testScreen.classList.toggle("hidden", which !== "test");
+      if (els.testResults) els.testResults.classList.toggle("hidden", which !== "testover");
       updateModalGuards();
     }
 
@@ -2209,6 +2510,8 @@
       if (els.start && !els.start.classList.contains("hidden")) return els.start;
       if (els.over && !els.over.classList.contains("hidden")) return els.over;
       if (els.pause && !els.pause.classList.contains("hidden")) return els.pause;
+      if (els.testScreen && !els.testScreen.classList.contains("hidden")) return els.testScreen;
+      if (els.testResults && !els.testResults.classList.contains("hidden")) return els.testResults;
       return null;
     }
 
@@ -3574,9 +3877,10 @@
       if (event.isComposing || event.keyCode === 229) {
         return;
       }
-      // Held keys must not machine-gun mistypes, SFX, or pause toggling.
+      // Held keys must not machine-gun mistypes, SFX, or pause toggling — but a
+      // held Backspace deleting through a Speed Check word is expected behaviour.
       if (event.repeat) {
-        return;
+        if (!(state.status === "test" && event.key === "Backspace")) return;
       }
 
       const key = event.key;
@@ -3592,6 +3896,25 @@
 
       if (settingsOpen()) {
         if (key === "Escape" || key === "Enter") { event.preventDefault(); closeSettings(); }
+        return;
+      }
+
+      // Speed Check: typing the stream, Backspace deletes, Space advances, Esc bails.
+      // Zero stakes — Esc discards instantly with no history entry. (Tab is consumed
+      // by the focus trap above, cycling the Restart / Exit buttons.)
+      if (state.status === "test") {
+        if (key === "Escape") { event.preventDefault(); leaveTest(); return; }
+        if (key === "Backspace") { event.preventDefault(); testBackspace(); return; }
+        if (key === " ") { event.preventDefault(); testSpace(); return; }
+        if (key.length === 1 && /^[a-z]$/i.test(key)) {
+          event.preventDefault();
+          testType(key.toLowerCase());
+        }
+        return;
+      }
+      if (state.status === "testover") {
+        if (key === "Enter") { event.preventDefault(); enterTest(); }
+        else if (key === "Escape" || key.toLowerCase() === "m") { event.preventDefault(); leaveTest(); }
         return;
       }
 
@@ -3612,6 +3935,7 @@
         if (key === "1") startGame("beginner");
         else if (key === "2") startGame("intermediate");
         else if (key === "3") startGame("advanced");
+        else if (key.toLowerCase() === "t") { event.preventDefault(); enterTest(); }
         else if (key === "Enter") { event.preventDefault(); startGame(state.modeKey); }
         return;
       }
@@ -3687,6 +4011,8 @@
     }
 
     function backToStart() {
+      stopTestClock();
+      if (state.test) state.test.running = false;
       cancelCountdown();
       state.countdownHeld = false;
       state.status = "start";
@@ -4061,6 +4387,8 @@
     }
     function openSettings() {
       if (!els.settingsScreen) return;
+      // No live test timer should run behind a modal — discard the run first.
+      if (state.status === "test") leaveTest("Speed check reset");
       state.settingsOpener = document.activeElement;
       // Never let settings sit over live gameplay — words would keep falling and
       // strikes accumulate behind the overlay. Pause first; closing the overlay
@@ -4167,6 +4495,383 @@
       });
     }
 
+    // ---- Speed Check: optional 60-second WPM typing test ----------------------
+    // A static word-stream (Monkeytype-style) measured on the wall clock — the
+    // purest WPM read, deliberately decoupled from the game's beat/spawn pacing.
+    // All counters live in state.test; the test never touches gameplay state, the
+    // RAF loop, or the beat loop.
+    const TEST_SENTINEL = " ";
+
+    function enterTest() {
+      cancelCountdown();
+      state.countdownHeld = false;
+      stopBeatLoop();
+      if (state.rafId !== null) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+      stopMusic(0.2);            // no music during the test; kills any preview loop
+      state.resumePreview = false;
+      stopTestClock();
+      state.status = "test";
+      state.test = freshTestState();
+      state.test.running = true;
+      state.test.words = buildTestWords(100);
+      renderTestStream();
+      advanceTestWord();
+      resetTestHud();
+      els.shell.classList.remove("play-active");
+      closeSettings();
+      setScreen("test");
+      positionTestCaret();
+      scrollTestStream();
+      // Touch: focus the hidden input inside the tap gesture so the soft keyboard
+      // pops. Desktop: drop focus so Space/Enter can't fire the Restart button.
+      if (els.shell.classList.contains("touch")) {
+        focusTouchInput();
+        resetTouchSentinel();
+      } else if (document.activeElement && document.activeElement !== document.body) {
+        try { document.activeElement.blur(); } catch (error) {}
+      }
+      announce("Speed check ready. Start typing to begin.");
+    }
+
+    function leaveTest(msg) {
+      stopTestClock();
+      if (state.test) state.test.running = false;
+      state.status = "start";
+      if (els.touchInput) els.touchInput.blur();
+      setScreen("start");
+      renderStartProfile();
+      focusFirst(els.start);
+      if (msg) announce(msg);
+    }
+
+    function resetTestHud() {
+      if (els.testTimer) els.testTimer.textContent = "60";
+      if (els.testLiveWpm) els.testLiveWpm.textContent = "0";
+      if (els.testStreamInner) els.testStreamInner.style.transform = "translateY(0px)";
+    }
+
+    // Common words, lengths 3-8, reshuffled and concatenated to the requested
+    // count. Independent of the difficulty configs and the game's wordBag.
+    function buildTestWords(n) {
+      const pool = BUILT_IN_WORDS.filter((w) => w.length >= 3 && w.length <= 8);
+      const out = [];
+      if (!pool.length) return out;
+      while (out.length < n) {
+        out.push.apply(out, shuffle(pool.slice()));
+      }
+      return out.slice(0, n);
+    }
+
+    function appendTestWords(n) {
+      const t = state.test;
+      const inner = els.testStreamInner;
+      if (!inner) return;
+      const extra = buildTestWords(n);
+      for (let i = 0; i < extra.length; i++) {
+        const idx = t.words.length;
+        t.words.push(extra[i]);
+        inner.appendChild(makeTestWordNode(extra[i], idx));
+      }
+    }
+
+    function makeTestWordNode(word, index) {
+      const el = document.createElement("span");
+      el.className = "test-word";
+      const letters = [];
+      for (const ch of word) {
+        const s = document.createElement("span");
+        s.className = "test-letter";
+        s.textContent = ch;
+        el.appendChild(s);
+        letters.push(s);
+      }
+      state.test.wordNodes[index] = { el: el, letters: letters };
+      return el;
+    }
+
+    // One innerHTML-free build of all word nodes; the caret node is re-parented
+    // back in so it survives the reset.
+    function renderTestStream() {
+      const t = state.test;
+      const inner = els.testStreamInner;
+      if (!inner) return;
+      inner.textContent = "";
+      if (els.testCaret) inner.appendChild(els.testCaret);
+      t.wordNodes = [];
+      for (let i = 0; i < t.words.length; i++) {
+        inner.appendChild(makeTestWordNode(t.words[i], i));
+      }
+    }
+
+    function advanceTestWord() {
+      const t = state.test;
+      if (t.curNode) t.curNode.el.classList.remove("active");
+      t.curNode = t.wordNodes[t.wordIndex] || null;
+      if (t.curNode) t.curNode.el.classList.add("active");
+    }
+
+    // The clock starts on the first keystroke (timestamp-based, so it's immune to
+    // interval throttling) — the timer can never expire before typing begins.
+    function ensureTestStarted() {
+      const t = state.test;
+      if (t.startMs) return;
+      t.startMs = performance.now();
+      startTestClock();
+      announce("Speed check started.");
+    }
+
+    function testType(ch) {
+      const t = state.test;
+      if (!t.running) return;
+      const word = t.words[t.wordIndex] || "";
+      const i = t.input.length;
+      if (i >= word.length && t.extraEls.length >= 8) return; // overtype cap (Monkeytype style)
+      ensureTestStarted();
+      t.totalPresses += 1;
+      t.typedChars += 1;
+      if (i < word.length) {
+        const correct = ch === word.charAt(i);
+        if (correct) t.correctPresses += 1;
+        t.input.push({ char: ch, correct: correct, extra: false });
+        if (t.curNode && t.curNode.letters[i]) {
+          t.curNode.letters[i].className = "test-letter " + (correct ? "ok" : "bad");
+        }
+      } else {
+        const span = document.createElement("span");
+        span.className = "test-letter extra bad";
+        span.textContent = ch;
+        if (t.curNode) t.curNode.el.appendChild(span);
+        t.extraEls.push(span);
+        t.input.push({ char: ch, correct: false, extra: true });
+      }
+      positionTestCaret();
+    }
+
+    function testBackspace() {
+      const t = state.test;
+      if (!t.running || !t.input.length) return;
+      const last = t.input.pop();
+      if (last.extra) {
+        const span = t.extraEls.pop();
+        if (span && span.parentNode) span.parentNode.removeChild(span);
+      } else if (t.curNode && t.curNode.letters[t.input.length]) {
+        t.curNode.letters[t.input.length].className = "test-letter";
+      }
+      positionTestCaret();
+    }
+
+    function testSpace() {
+      const t = state.test;
+      if (!t.running) return;
+      // Ignore a leading / empty-word space BEFORE starting the clock, so a
+      // reflexive first-press space can't silently burn the 60-second budget.
+      if (!t.input.length) return;
+      ensureTestStarted();
+      const word = t.words[t.wordIndex] || "";
+      t.totalPresses += 1;
+      t.typedChars += 1;
+      let correctLetters = 0;
+      for (let k = 0; k < t.input.length && k < word.length; k++) {
+        if (t.input[k].correct) correctLetters += 1;
+      }
+      const clean = t.input.length === word.length && correctLetters === word.length;
+      if (clean) t.correctPresses += 1;
+      // correctChars = correct letters + one space credit per cleanly cleared word.
+      t.committedCorrect += correctLetters + (clean ? 1 : 0);
+      t.wordIndex += 1;
+      t.input = [];
+      t.extraEls = [];
+      if (t.words.length - t.wordIndex < 15) appendTestWords(50);
+      advanceTestWord();
+      scrollTestStream();
+      positionTestCaret();
+    }
+
+    // Correct chars currently standing (committed words + the live word) — recomputed
+    // so Backspace correctly walks the net WPM back down.
+    function liveTestCorrect() {
+      const t = state.test;
+      const word = t.words[t.wordIndex] || "";
+      let cur = 0;
+      for (let i = 0; i < t.input.length && i < word.length; i++) {
+        if (t.input[i].correct) cur += 1;
+      }
+      return t.committedCorrect + cur;
+    }
+
+    function liveTestWpm() {
+      const t = state.test;
+      if (!t.startMs) return 0;
+      const minutes = (performance.now() - t.startMs) / 60000;
+      if (minutes <= 0) return 0;
+      return Math.max(0, Math.round((liveTestCorrect() / 5) / minutes));
+    }
+
+    function startTestClock() {
+      stopTestClock();
+      state.test.clockTimer = window.setInterval(tickTestClock, 250);
+      tickTestClock();
+    }
+
+    function stopTestClock() {
+      if (state.test && state.test.clockTimer) {
+        window.clearInterval(state.test.clockTimer);
+        state.test.clockTimer = null;
+      }
+    }
+
+    function tickTestClock() {
+      const t = state.test;
+      if (!t.running || !t.startMs) return;
+      const elapsed = performance.now() - t.startMs;
+      if (elapsed >= 60000) { finishTest(); return; }
+      if (els.testTimer) els.testTimer.textContent = Math.max(0, Math.ceil((60000 - elapsed) / 1000));
+      if (els.testLiveWpm) els.testLiveWpm.textContent = liveTestWpm();
+    }
+
+    // Caret sits inside the scrolling inner wrapper, so it shares the letters'
+    // offset parent and rides the translateY with them — no scroll math needed.
+    function positionTestCaret() {
+      const t = state.test;
+      if (!els.testCaret || !t.curNode) return;
+      const word = t.words[t.wordIndex] || "";
+      const i = t.input.length;
+      let left, top, h;
+      if (i < word.length && t.curNode.letters[i]) {
+        const span = t.curNode.letters[i];
+        left = span.offsetLeft; top = span.offsetTop; h = span.offsetHeight;
+      } else {
+        const last = t.extraEls.length
+          ? t.extraEls[t.extraEls.length - 1]
+          : t.curNode.letters[word.length - 1];
+        if (last) { left = last.offsetLeft + last.offsetWidth; top = last.offsetTop; h = last.offsetHeight; }
+        else { left = t.curNode.el.offsetLeft; top = t.curNode.el.offsetTop; h = t.curNode.el.offsetHeight; }
+      }
+      els.testCaret.style.transform = "translate(" + left + "px, " + top + "px)";
+      if (h) els.testCaret.style.height = h + "px";
+    }
+
+    function scrollTestStream() {
+      const t = state.test;
+      if (!t.curNode || !els.testStreamInner) return;
+      const lineH = t.curNode.el.offsetHeight || 0;
+      // Keep the active word on the 2nd of three visible lines once past the first.
+      const scroll = Math.max(0, t.curNode.el.offsetTop - lineH);
+      t.scroll = scroll;
+      els.testStreamInner.style.transform = "translateY(" + (-scroll) + "px)";
+    }
+
+    function finishTest() {
+      const t = state.test;
+      if (!t.running) return;
+      t.running = false;
+      stopTestClock();
+      const elapsed = Math.max(1, performance.now() - t.startMs);
+      const minutes = elapsed / 60000;
+      const wpm = Math.max(0, Math.round((liveTestCorrect() / 5) / minutes));
+      const raw = Math.max(0, Math.round((t.typedChars / 5) / minutes));
+      const acc = t.totalPresses > 0 ? Math.round((t.correctPresses / t.totalPresses) * 100) : 100;
+      const prior = state.profile.tests || [];
+      const prevBest = prior.reduce((m, e) => Math.max(m, e.wpm || 0), 0);
+      const isPB = wpm > 0 && wpm > prevBest;
+      if (wpm > 0) {
+        state.profile.tests = prior
+          .concat({ d: new Date().toISOString(), wpm: wpm, raw: raw, acc: acc })
+          .slice(-50);
+        saveProfile();
+      }
+      state.status = "testover";
+      renderTestResults(wpm, raw, acc, isPB);
+      setScreen("testover");
+      focusFirst(els.testResults);
+      playLevelUp();
+      announce("Speed check complete. " + wpm + " words per minute, " + acc +
+        " percent accuracy." + (isPB ? " New personal best!" : ""));
+    }
+
+    function renderTestResults(wpm, raw, acc, isPB) {
+      if (els.testWpm) els.testWpm.textContent = wpm;
+      if (els.testRaw) els.testRaw.textContent = raw;
+      if (els.testAcc) els.testAcc.textContent = acc + "%";
+      if (els.testPbBadge) els.testPbBadge.hidden = !isPB;
+      const modal = els.testResults && els.testResults.querySelector(".modal");
+      if (modal) modal.classList.toggle("new-high", !!isPB);
+      buildTestChart();
+      renderTestRecent();
+    }
+
+    // Inline SVG sparkline of the last 20 WPM scores; PB circled in lime, latest
+    // in the accent. aria-hidden — the summary line + recent list carry the data.
+    function buildTestChart() {
+      const svg = els.testChart;
+      if (!svg) return;
+      const tests = state.profile.tests || [];
+      const pts = tests.slice(-20);
+      if (!pts.length) {
+        svg.innerHTML = "";
+        if (els.testChartSummary) els.testChartSummary.textContent = "";
+        return;
+      }
+      const wpms = pts.map((e) => e.wpm);
+      const maxW = Math.max.apply(null, wpms);
+      const minW = Math.min.apply(null, wpms);
+      const span = Math.max(1, maxW - minW);
+      const n = pts.length;
+      const X = (i) => n === 1 ? 50 : (i / (n - 1)) * 96 + 2;
+      const Y = (w) => 38 - ((w - minW) / span) * 36;
+      let pbIdx = 0;
+      for (let i = 1; i < n; i++) { if (wpms[i] > wpms[pbIdx]) pbIdx = i; }
+      const latestIdx = n - 1;
+      const coords = pts.map((e, i) => X(i).toFixed(1) + "," + Y(e.wpm).toFixed(1)).join(" ");
+      const dot = (i, color, r) =>
+        '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(wpms[i]).toFixed(1) +
+        '" r="' + r + '" fill="' + color + '"></circle>';
+      let content = "";
+      if (n > 1) {
+        content += '<polyline points="' + coords + '" fill="none" stroke="var(--accent)" ' +
+          'stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" ' +
+          'vector-effect="non-scaling-stroke"></polyline>';
+      }
+      content += dot(pbIdx, "var(--c-lime)", 2.4);
+      if (latestIdx !== pbIdx) content += dot(latestIdx, "var(--accent)", 2);
+      svg.innerHTML = content;
+      if (els.testChartSummary) {
+        els.testChartSummary.textContent = "Best " + maxW + " WPM · " + tests.length +
+          " test" + (tests.length === 1 ? "" : "s");
+      }
+    }
+
+    function renderTestRecent() {
+      if (!els.testRecent) return;
+      const tests = (state.profile.tests || []).slice(-5).reverse();
+      if (!tests.length) {
+        els.testRecent.innerHTML = '<li class="test-recent-empty">First run — no history yet.</li>';
+        return;
+      }
+      els.testRecent.innerHTML = tests.map((e) => {
+        const date = formatTestDate(e.d);
+        return '<li><span class="trc-wpm">' + e.wpm + ' WPM</span>' +
+          '<span class="trc-meta">' + e.acc + '%' + (date ? ' · ' + date : '') + '</span></li>';
+      }).join("");
+    }
+
+    function formatTestDate(iso) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "";
+        return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      } catch (error) { return ""; }
+    }
+
+    // Speed Check keeps one sentinel char in the touch input so a soft-keyboard
+    // Backspace produces a deleteContentBackward we can map to testBackspace.
+    function resetTouchSentinel() {
+      if (!els.touchInput) return;
+      els.touchInput.value = TEST_SENTINEL;
+      try { els.touchInput.setSelectionRange(1, 1); } catch (error) {}
+    }
+
     // ---- Touch mode: soft-keyboard input + on-screen pause ----
     function detectInput() {
       const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
@@ -4191,6 +4896,22 @@
         // here instead. Hardware keydowns preventDefault before insertion, so
         // a letter is never processed twice.
         els.touchInput.addEventListener("input", (event) => {
+          const inputType = event && event.inputType;
+          // Speed Check keeps a 1-char sentinel in the field so a soft-keyboard
+          // Backspace fires deleteContentBackward (no data) and maps to testBackspace.
+          if (state.status === "test") {
+            if (inputType === "deleteContentBackward" || inputType === "deleteContentForward") {
+              testBackspace();
+            } else {
+              const data = (event && event.data) || "";
+              for (const ch of String(data)) {
+                if (ch === " ") testSpace();
+                else if (/^[a-z]$/i.test(ch)) testType(ch.toLowerCase());
+              }
+            }
+            resetTouchSentinel();
+            return;
+          }
           const data = (event && event.data) || els.touchInput.value;
           els.touchInput.value = "";
           if (state.status !== "playing" || !data) return;
@@ -4269,7 +4990,26 @@
       mobileBanner: byId("mobileBanner"),
       srAnnounce: byId("srAnnounce"),
       touchInput: byId("touchInput"),
-      touchPause: byId("touchPauseButton")
+      touchPause: byId("touchPauseButton"),
+      speedCheck: byId("speedCheckButton"),
+      testScreen: byId("testScreen"),
+      testResults: byId("testResultsScreen"),
+      testTimer: byId("testTimer"),
+      testLiveWpm: byId("testLiveWpm"),
+      testStream: byId("testStream"),
+      testStreamInner: byId("testStreamInner"),
+      testCaret: byId("testCaret"),
+      testRestart: byId("testRestart"),
+      testExit: byId("testExit"),
+      testWpm: byId("testWpm"),
+      testRaw: byId("testRaw"),
+      testAcc: byId("testAcc"),
+      testPbBadge: byId("testPbBadge"),
+      testChart: byId("testChart"),
+      testChartSummary: byId("testChartSummary"),
+      testRecent: byId("testRecent"),
+      testRetake: byId("testRetake"),
+      testMenu: byId("testMenu")
     });
 
     document.querySelectorAll("[data-mode]").forEach((button) => {
@@ -4279,6 +5019,11 @@
     els.mode.addEventListener("click", backToStart);
     els.resume.addEventListener("click", resumeGame);
     els.pauseMode.addEventListener("click", backToStart);
+    if (els.speedCheck) els.speedCheck.addEventListener("click", () => { enterTest(); els.speedCheck.blur(); });
+    if (els.testRestart) els.testRestart.addEventListener("click", () => { enterTest(); });
+    if (els.testExit) els.testExit.addEventListener("click", () => leaveTest());
+    if (els.testRetake) els.testRetake.addEventListener("click", () => { enterTest(); });
+    if (els.testMenu) els.testMenu.addEventListener("click", () => leaveTest());
     // Blur after click so Space/Enter during play can't re-activate the button.
     els.mute.addEventListener("click", () => { toggleMute(); els.mute.blur(); });
     if (els.share) els.share.addEventListener("click", shareResults);
@@ -4295,6 +5040,10 @@
     function handleResize() {
       state.lineBottom = readLineBottom();
       state.playHeight = els.playfield.clientHeight;
+      if (state.status === "test") {
+        scrollTestStream();
+        positionTestCaret();
+      }
       if (!state.words.length) return;
       const fieldWidth = els.playfield.clientWidth;
       state.words.forEach((word) => {
@@ -4327,6 +5076,11 @@
           if (state.musicSource && state.musicRole === "preview") stopMusic(0.2);
         } else if (state.status === "resuming") {
           holdResume();
+        } else if (state.status === "test") {
+          // A test scored behind a hidden tab would be garbage — discard it, no history.
+          leaveTest("Speed check reset");
+        } else if (state.status === "testover") {
+          // Results are static; nothing to pause.
         } else {
           pauseGame();
         }
@@ -4366,6 +5120,12 @@
     wireRadioArrows(els.songPicker, ".song-chip", (chip) => selectSong(chip.dataset.song));
     updateModalGuards();
     focusFirst(els.start);
+
+    // Opt-in automation hook (query string ?e2e) — never attached in normal use,
+    // so production ships without an exposed internals surface.
+    if (location.search.indexOf("e2e") !== -1) {
+      window.__bt = { state: state, finishTest: finishTest, enterTest: enterTest, leaveTest: leaveTest };
+    }
   </script>
 </body>
 </html>
